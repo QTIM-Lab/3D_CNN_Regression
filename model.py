@@ -3,87 +3,71 @@ from keras import backend as K
 from keras.engine import Input, Model
 from keras.layers import Conv3D, MaxPooling3D, UpSampling3D, Activation
 from keras.optimizers import Adam
+from keras.models import load_model
+
+from dummy_data import dummy_data_generator
 
 try:
     from keras.engine import merge
 except ImportError:
     from keras.layers.merge import concatenate
 
-def regression_model_3d(input_shape, downsize_filters_factor=1, pool_size=(2, 2, 2), n_labels=1,
-                  initial_learning_rate=0.00001, deconvolution=False):
+def regression_model_3d(input_shape, downsize_filters_factor=1, initial_learning_rate=0.00001):
 
     # 144x144x144
     inputs = Input(input_shape)
 
-    conv1 = Conv3D(int(32/downsize_filters_factor), (3, 3, 3), activation='relu',
-                   padding='same')(inputs)
+    conv1 = Conv3D(int(32/downsize_filters_factor), (3, 3, 3), activation='relu', padding='same')(inputs)
 
-    conv1 = Conv3D(int(64/downsize_filters_factor), (3, 3, 3), activation='relu',
-                   padding='same')(conv1)
+    conv1 = Conv3D(int(64/downsize_filters_factor), (3, 3, 3), activation='relu', padding='same')(conv1)
 
-    conv1 = Conv3D(int(32/downsize_filters_factor), (3, 3, 3), activation='relu',
-                   padding='same')(conv1)
+    conv1 = Conv3D(int(32/downsize_filters_factor), (3, 3, 3), activation='relu', padding='same')(conv1)
 
-    conv1 = Conv3D(int(1/downsize_filters_factor), (3, 3, 3), activation='relu',
-                   padding='same')(conv1)
+    conv1 = Conv3D(int(1/downsize_filters_factor), (3, 3, 3), activation='relu', padding='same')(conv1)
 
     model = Model(inputs=inputs, outputs=conv1)
 
-    model.compile(optimizer=Adam(lr=initial_learning_rate), loss=dice_coef_loss, metrics=[dice_coef])
+    model.compile(optimizer=Adam(lr=initial_learning_rate), loss=msq_loss, metrics=[msq])
 
     return model
 
-def dice_coef(y_true, y_pred, smooth=1.):
-    y_true_f = K.flatten(y_true)
-    y_pred_f = K.flatten(y_pred)
-    intersection = K.sum(y_true_f * y_pred_f)
-    return (2. * intersection + smooth) / (K.sum(y_true_f) + K.sum(y_pred_f) + smooth)
+def msq(y_true, y_pred):
+    return K.sum(K.pow(y_true - y_pred, 2), axis=None)
 
+def msq_loss(y_true, y_pred):
+    return -msq(y_true, y_pred)
 
-def dice_coef_loss(y_true, y_pred):
-    return -dice_coef(y_true, y_pred)
+def load_old_model(model_file):
+    print("Loading pre-trained model")
 
+    custom_objects = {'msq': msq, 'msq_loss': msq_loss}
 
-def compute_level_output_shape(filters, depth, pool_size, image_shape):
-    """
-    Each level has a particular output shape based on the number of filters used in that level and the depth or number 
-    of max pooling operations that have been done on the data at that point.
-    :param image_shape: shape of the 3d image.
-    :param pool_size: the pool_size parameter used in the max pooling operation.
-    :param filters: Number of filters used by the last node in a given level.
-    :param depth: The number of levels down in the U-shaped model a given node is.
-    :return: 5D vector of the shape of the output node 
-    """
-    if depth != 0:
-        output_image_shape = np.divide(image_shape, np.multiply(pool_size, depth)).tolist()
-    else:
-        output_image_shape = image_shape
-    return tuple([None, filters] + [int(x) for x in output_image_shape])
+    try:
+        from keras_contrib.layers import Deconvolution3D
+        custom_objects["Deconvolution3D"] = Deconvolution3D
+    except ImportError:
+        print("Could not import Deconvolution3D. To use Deconvolution3D install keras-contrib.")
 
-
-def get_upconv(depth, nb_filters, pool_size, image_shape, kernel_size=(2, 2, 2), strides=(2, 2, 2),
-               deconvolution=False):
-    if deconvolution:
-        try:
-            from keras_contrib.layers import Deconvolution3D
-        except ImportError:
-            raise ImportError("Install keras_contrib in order to use deconvolution. Otherwise set deconvolution=False.")
-
-        return Deconvolution3D(filters=nb_filters, kernel_size=kernel_size,
-                               output_shape=compute_level_output_shape(filters=nb_filters, depth=depth,
-                                                                       pool_size=pool_size, image_shape=image_shape),
-                               strides=strides, input_shape=compute_level_output_shape(filters=nb_filters,
-                                                                                       depth=depth+1,
-                                                                                       pool_size=pool_size,
-                                                                                       image_shape=image_shape))
-    else:
-        return UpSampling3D(size=pool_size)
+    return load_model(model_file, custom_objects=custom_objects)
 
 if __name__ == '__main__':
 
-  # config["pool_size"] = (2, 2, 2)
-  # config["image_shape"] = (144, 144, 144)  # This determines what shape the images will be cropped/resampled to.
-  # config["n_labels"] = 1  # not including background
+    pass
 
-  print regression_model_3d((4, 144, 144, 144), downsize_filters_factor=1, pool_size=(2, 2, 2), n_labels=1,
-                  initial_learning_rate=0.00001, deconvolution=False)
+    # config["pool_size"] = (2, 2, 2)
+    # config["image_shape"] = (144, 144, 144)  # This determines what shape the images will be cropped/resampled to.
+    # config["n_labels"] = 1  # not including background
+
+    # model = regression_model_3d((4, 5, 5, 5), downsize_filters_factor=1, pool_size=(2, 2, 2), n_labels=1, initial_learning_rate=0.00001, deconvolution=False)
+
+    # case_num = 60
+    # training_data = dummy_data_generator(cases=case_num, input_modalities=4, modality_dims=(5,5,5))
+
+
+
+
+    # testing_data = dummy_data_generator(cases=test_num, input_modalities=4, modality_dims=(5,5,5))
+
+    # output_model_file = 'test.h5'
+
+    # train_model(model=model, model_file=output_model_file, training_generator=train_generator,validation_generator=validation_generator, steps_per_epoch=nb_train_samples, validation_steps=nb_test_samples, initial_learning_rate=config["initial_learning_rate"], learning_rate_drop=config["learning_rate_drop"], learning_rate_epochs=config["decay_learning_rate_every_x_epochs"], n_epochs=config["n_epochs"])  
