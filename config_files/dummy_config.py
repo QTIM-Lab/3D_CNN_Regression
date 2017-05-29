@@ -21,18 +21,24 @@ config["model_file"] = os.path.abspath("./model_files/dummy_model.h5")
 
 # Model parameters
 config["downsize_filters_factor"] = 1
+config["decay_learning_rate_every_x_epochs"] = 10
 config["initial_learning_rate"] = 0.00001
+config["learning_rate_drop"] = 0.5
+config["n_epochs"] = 50
+
+# Model training parameters
+config["train_test_split"] = .8
+config["batch_size"] = 1
+config["training_file"] = os.path.abspath("./hdf5_data/training_ids.pkl")
+config["validation_file"] = os.path.abspath("./hdf5_data/validation_ids.pkl")
 
 # config["pool_size"] = (2, 2, 2)  # This determines what shape the images will be cropped/resampled to.
 # config["n_labels"] = 1  # not including background
-# config["batch_size"] = 1
 # config["n_epochs"] = 50
 # config["decay_learning_rate_every_x_epochs"] = 10
 # config["initial_learning_rate"] = 0.00001
 # config["learning_rate_drop"] = 0.5
 # config["validation_split"] = 0.8
-# config["training_file"] = os.path.abspath("./brats/training_ids.pkl")
-# config["validation_file"] = os.path.abspath("./brats/validation_ids.pkl")
 # config["smooth"] = 1.0
 # # config["nb_channels"] = len(config["training_modalities"])
 # # config["input_shape"] = tuple([config["nb_channels"]] + list(config["image_shape"]))
