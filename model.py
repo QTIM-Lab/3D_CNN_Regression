@@ -1,7 +1,7 @@
 import numpy as np
 from keras import backend as K
 from keras.engine import Input, Model
-from keras.layers import Conv3D, MaxPooling3D, UpSampling3D, Activation
+from keras.layers import Conv3D, MaxPooling3D, UpSampling3D, Activation, Dropout
 from keras.optimizers import Adam
 from keras.models import load_model
 
@@ -17,15 +17,21 @@ def regression_model_3d(input_shape, downsize_filters_factor=1, initial_learning
     # 144x144x144
     inputs = Input(input_shape)
 
-    conv1 = Conv3D(int(32/downsize_filters_factor), (3, 3, 3), activation='relu', padding='same')(inputs)
+    conv1 = Conv3D(int(32/downsize_filters_factor), (3, 3, 3), activation='tanh', padding='same', data_format='channels_first')(inputs)
 
-    conv1 = Conv3D(int(64/downsize_filters_factor), (3, 3, 3), activation='relu', padding='same')(conv1)
+    dropout1 = Dropout(0.25)(conv1)
 
-    conv1 = Conv3D(int(32/downsize_filters_factor), (3, 3, 3), activation='relu', padding='same')(conv1)
+    conv2 = Conv3D(int(64/downsize_filters_factor), (3, 3, 3), activation='tanh', padding='same', data_format='channels_first')(dropout1)
 
-    conv1 = Conv3D(int(1/downsize_filters_factor), (3, 3, 3), activation='relu', padding='same')(conv1)
+    dropout2 = Dropout(0.25)(conv2)
 
-    model = Model(inputs=inputs, outputs=conv1)
+    conv3 = Conv3D(int(32/downsize_filters_factor), (3, 3, 3), activation='tanh', padding='same', data_format='channels_first')(dropout2)
+
+    dropout3 = Dropout(0.25)(conv3)
+
+    conv4 = Conv3D(int(1), (3, 3, 3), activation='tanh', padding='same', data_format='channels_first')(dropout3)
+
+    model = Model(inputs=inputs, outputs=conv4)
 
     model.compile(optimizer=Adam(lr=initial_learning_rate), loss=msq_loss, metrics=[msq])
 
@@ -35,7 +41,7 @@ def msq(y_true, y_pred):
     return K.sum(K.pow(y_true - y_pred, 2), axis=None)
 
 def msq_loss(y_true, y_pred):
-    return -msq(y_true, y_pred)
+    return msq(y_true, y_pred)
 
 def load_old_model(model_file):
     print("Loading pre-trained model")

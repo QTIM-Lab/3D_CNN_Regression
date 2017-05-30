@@ -7,10 +7,11 @@ from keras.callbacks import ModelCheckpoint, CSVLogger, Callback, LearningRateSc
 
 from config_files.dummy_config import config
 
-from model import regression_model_3d
+from model import regression_model_3d, load_old_model
 from load_data import fetch_data_files, write_data_to_file
 from data_generator import get_training_and_validation_generators
 from data_utils import pickle_dump, pickle_load
+from predict import run_validation_case
 
 def run_regression(overwrite=False):
 
@@ -44,14 +45,13 @@ def run_regression(overwrite=False):
 
     print train_generator, validation_generator, num_train_steps, num_test_steps
 
-    fd = dg
-
     # run training
     train_model(model=model, model_file=config["model_file"], training_generator=train_generator, validation_generator=validation_generator, steps_per_epoch=num_train_steps, validation_steps=num_test_steps, initial_learning_rate=config["initial_learning_rate"], learning_rate_drop=config["learning_rate_drop"], learning_rate_epochs=config["decay_learning_rate_every_x_epochs"], n_epochs=config["n_epochs"])
 
     # Close model.
-    hdf5_file_opened.close()
+    open_train_hdf5.close()
 
+    run_validation_case(output_dir=config['predictions_folder'], model_file=config['model_file'], data_file=open_test_hdf5)
 
 def train_model(model, model_file, training_generator, validation_generator, steps_per_epoch, validation_steps, initial_learning_rate, learning_rate_drop, learning_rate_epochs, n_epochs):
 

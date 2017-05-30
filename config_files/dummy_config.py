@@ -10,7 +10,7 @@ config["hdf5_test"] = './hdf5_data/dummy_test.hdf5'
 
 # If doing patch-based, images may not be needed?
 # But for now....
-config["image_shape"] = (5, 5, 5)
+config["image_shape"] = (8,8,8)
 
 # Modalities. Always make input_groundtruth as list.
 config["input_modalities"] = ["modality_0", "modality_1", "modality_2", "modality_3"]
@@ -22,15 +22,18 @@ config["model_file"] = os.path.abspath("./model_files/dummy_model.h5")
 # Model parameters
 config["downsize_filters_factor"] = 1
 config["decay_learning_rate_every_x_epochs"] = 10
-config["initial_learning_rate"] = 0.00001
-config["learning_rate_drop"] = 0.5
+config["initial_learning_rate"] = 0.001
+config["learning_rate_drop"] = 0.9
 config["n_epochs"] = 50
 
 # Model training parameters
 config["train_test_split"] = .8
-config["batch_size"] = 1
+config["batch_size"] = 10
 config["training_file"] = os.path.abspath("./hdf5_data/training_ids.pkl")
 config["validation_file"] = os.path.abspath("./hdf5_data/validation_ids.pkl")
+
+# Model testing parameters
+config['predictions_folder'] = os.path.abspath('./predictions')
 
 # config["pool_size"] = (2, 2, 2)  # This determines what shape the images will be cropped/resampled to.
 # config["n_labels"] = 1  # not including background
