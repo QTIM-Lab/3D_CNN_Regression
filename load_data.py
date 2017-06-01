@@ -34,7 +34,7 @@ def write_data_to_file(input_data_files, output_hdf5_filepath, image_shape):
     n_modalities = len(input_data_files[0]) - 1
 
     try:
-        hdf5_file, data_storage, truth_storage = create_hdf5_file(output_hdf5_filepath, modality_num=n_modalities, case_num=n_cases, input_shape=image_shape)
+        hdf5_file, data_storage, truth_storage = create_image_hdf5_file(output_hdf5_filepath, modality_num=n_modalities, case_num=n_cases, input_shape=image_shape)
     except Exception as e:
         # If something goes wrong, delete the incomplete data file
         os.remove(output_hdf5_filepath)
@@ -45,7 +45,7 @@ def write_data_to_file(input_data_files, output_hdf5_filepath, image_shape):
     hdf5_file.close()
     return output_hdf5_filepath
 
-def create_hdf5_file(output_filepath, modality_num, case_num, input_shape):
+def create_image_hdf5_file(output_filepath, modality_num, case_num, input_shape):
 
     # Investigate hdf5 files.
     hdf5_file = tables.open_file(output_filepath, mode='w')

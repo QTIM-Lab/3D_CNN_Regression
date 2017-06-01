@@ -8,9 +8,13 @@ config["test_dir"] = os.path.abspath("./dummy_data/test")
 config["hdf5_train"] = './hdf5_data/dummy_train.hdf5'
 config["hdf5_test"] = './hdf5_data/dummy_test.hdf5'
 
-# If doing patch-based, images may not be needed?
-# But for now....
+# Image Information
 config["image_shape"] = (5, 5, 5)
+
+# Patch Information
+config['patches'] = True
+config['patch_shape'] = (8, 8, 8)
+config['train_patch_num'] = 2000
 
 # Modalities. Always make input_groundtruth as list.
 config["input_modalities"] = ["modality_0", "modality_1", "modality_2", "modality_3"]

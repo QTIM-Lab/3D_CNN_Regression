@@ -9,6 +9,7 @@ from config_files.dummy_config import config
 
 from model import regression_model_3d
 from load_data import fetch_data_files, write_data_to_file
+from load_patches import write_patches_to_file
 from data_generator import get_training_and_validation_generators
 from data_utils import pickle_dump, pickle_load
 
@@ -19,7 +20,10 @@ def run_regression(overwrite=False):
     # Load training data.
     if overwrite or not os.path.exists(os.path.abspath(config["hdf5_train"])):
         training_files = fetch_data_files(config['train_dir'], config['input_modalities'], config['input_groundtruth'])
-        write_data_to_file(training_files, config["hdf5_train"], input_image_shape)
+        if config['patches']:
+            write_patches_to_file(training_files, config['hdf5_train'], input_image_shape, patch_num=config['train_patch_num'], patch_shape=config['patch_shape'])
+        else:
+            write_data_to_file(training_files, config["hdf5_train"], input_image_shape)
 
     # Load tresting data. We could combine them
     # into one hdf5, but I feel that this provides more
