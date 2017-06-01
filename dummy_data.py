@@ -2,8 +2,9 @@ import os
 import numpy as np
 
 from image_utils import save_numpy_2_nifti
+from scipy.ndimage.interpolation import zoom
 
-def dummy_data_generator(cases=50, input_modalities=4, modality_dims=(5,5,5), dummy_data_folder = './dummy_data', train_test = [50, 10]):
+def dummy_data_generator(input_modalities=4, modality_dims=(8,8,8), dummy_data_folder = './dummy_data', train_test = [600, 10]):
 
     dummy_data_folder = os.path.abspath(dummy_data_folder)
 
@@ -26,15 +27,25 @@ def dummy_data_generator(cases=50, input_modalities=4, modality_dims=(5,5,5), du
                 os.mkdir(output_folder)
 
             case = []
+            input_modality_list = []
             output_groundtruth = np.zeros(modality_dims)
 
             for mod_num in xrange(input_modalities):
 
-                modality = np.random.random(modality_dims)
-                save_numpy_2_nifti(modality, '', os.path.join(output_folder, 'modality_' + str(mod_num) + '.nii.gz'))
-                output_groundtruth = output_groundtruth + modality
+                modality = np.random.random((2,2,2))
+                modality = zoom(modality, [4,4,4], order=1)
 
-            output_groundtruth = output_groundtruth / input_modalities
+                modality2 = np.zeros((2,2,2)) + .5
+                modality2 = zoom(modality2, [4,4,4], order=1)
+
+                # print np.sum((modality-modality2)**2)
+
+                input_modality_list += [modality]
+
+                save_numpy_2_nifti(modality, '', os.path.join(output_folder, 'modality_' + str(mod_num) + '.nii.gz'))
+                # output_groundtruth = output_groundtruth + modality
+
+            output_groundtruth = input_modality_list[0] - input_modality_list[1]**2 + input_modality_list[2] * input_modality_list[3]
 
             save_numpy_2_nifti(output_groundtruth, '', os.path.join(output_folder, 'groundtruth.nii.gz'))
 

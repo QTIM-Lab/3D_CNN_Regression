@@ -20,21 +20,21 @@ def generate_identity_affine(timepoints=1):
     else:
         return np.swapaxes(np.tile(np.array([[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]]), (timepoints, 1,1)), 0, 2)
 
-def save_numpy_2_nifti(image_numpy, reference_nifti_filepath='', output_path=[]):
+def save_numpy_2_nifti(image_numpy, reference_nifti_filepath='', output_filepath=[]):
 
     if reference_nifti_filepath != '':
         nifti_image = nib.load(reference_nifti_filepath)
         image_affine = nifti_image.affine
     else:
-        print 'Warning: no reference nifti file provided. Generating empty header.'
+        # print 'Warning: no reference nifti file provided. Generating empty header.'
         image_affine = generate_identity_affine()
 
     output_nifti = nib.Nifti1Image(image_numpy, image_affine)
 
-    if output_path == []:
+    if output_filepath == []:
         return output_nifti
     else:
-        nib.save(output_nifti, output_path)
+        nib.save(output_nifti, output_filepath)
 
 def nifti_2_numpy(filepath):
 

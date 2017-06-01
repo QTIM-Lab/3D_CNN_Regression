@@ -60,6 +60,7 @@ def data_generator(data_file, index_list, batch_size=1):
         x_list = []
         y_list = []
         shuffle(index_list)
+        print index_list
         for index in index_list:
 
             add_data(x_list, y_list, data_file, index)
