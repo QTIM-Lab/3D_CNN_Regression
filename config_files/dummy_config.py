@@ -14,7 +14,7 @@ config["image_shape"] = (100, 100, 100)
 # Patch Information
 config['patches'] = True
 config['patch_shape'] = (8, 8, 8)
-config['train_patch_num'] = 2000
+config['train_patch_num'] = 1500
 
 # Modalities. Always make input_groundtruth as list.
 config["input_modalities"] = ["modality_0", "modality_1", "modality_2", "modality_3"]

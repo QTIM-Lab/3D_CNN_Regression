@@ -4,6 +4,7 @@ from keras.engine import Input, Model
 from keras.layers import Conv3D, MaxPooling3D, UpSampling3D, Activation, Dropout
 from keras.optimizers import Adam
 from keras.models import load_model
+from keras import regularizers
 
 from dummy_data import dummy_data_generator
 
@@ -12,26 +13,73 @@ try:
 except ImportError:
     from keras.layers.merge import concatenate
 
-def regression_model_3d(input_shape, downsize_filters_factor=1, initial_learning_rate=0.00001):
+def regression_model_3d(input_shape, downsize_filters_factor=1, pool_size=(2, 2, 2), initial_learning_rate=0.00001, convolutions=4, dropout=.25, filter_shape=(3,3,3), deconvolution=True):
 
-    # 144x144x144
     inputs = Input(input_shape)
+    # inputs = Input((1,32,32,32,4))
+    # conv_mid = Conv3D(int(32/downsize_filters_factor), filter_shape, activation='relu', padding='same', data_format='channels_first')(inputs)
 
-    conv1 = Conv3D(int(32/downsize_filters_factor), (3, 3, 3), activation='tanh', padding='same', data_format='channels_first')(inputs)
+    # conv_mid = Dropout(0.25)(conv_mid)
 
-    dropout1 = Dropout(0.25)(conv1)
+    # for conv_num in xrange(convolutions-2):
 
-    conv2 = Conv3D(int(64/downsize_filters_factor), (3, 3, 3), activation='tanh', padding='same', data_format='channels_first')(dropout1)
+    #     conv_mid = Conv3D(int(32/downsize_filters_factor), filter_shape, activation='relu', padding='same', data_format='channels_first')(conv_mid)
+    #     conv_mid = Dropout(0.25)(conv_mid)
 
-    dropout2 = Dropout(0.25)(conv2)
+    # conv_out = Conv3D(int(1), filter_shape, activation='tanh', padding='same', data_format='channels_first', kernel_regularizer=regularizers.l2(0.01))(conv_mid)
 
-    conv3 = Conv3D(int(32/downsize_filters_factor), (3, 3, 3), activation='tanh', padding='same', data_format='channels_first')(dropout2)
+    # model = Model(inputs=inputs, outputs=conv_out)
 
-    dropout3 = Dropout(0.25)(conv3)
+    # model.compile(optimizer=Adam(lr=initial_learning_rate), loss=msq_loss, metrics=[msq])
 
-    conv4 = Conv3D(int(1), (3, 3, 3), activation='tanh', padding='same', data_format='channels_first')(dropout3)
+    conv1 = Conv3D(int(32/downsize_filters_factor), (3, 3, 3), activation='relu', data_format='channels_first',
+                   padding='same')(inputs)
+    conv1 = Conv3D(int(64/downsize_filters_factor), (3, 3, 3), activation='relu', data_format='channels_first',
+                   padding='same')(conv1)
+    pool1 = MaxPooling3D(pool_size=pool_size, data_format='channels_first',)(conv1)
 
-    model = Model(inputs=inputs, outputs=conv4)
+    conv2 = Conv3D(int(64/downsize_filters_factor), (3, 3, 3), activation='relu',data_format='channels_first',
+                   padding='same')(pool1)
+    conv2 = Conv3D(int(128/downsize_filters_factor), (3, 3, 3), activation='relu',data_format='channels_first',
+                   padding='same')(conv2)
+    pool2 = MaxPooling3D(pool_size=pool_size, data_format='channels_first')(conv2)
+
+    conv3 = Conv3D(int(128/downsize_filters_factor), (3, 3, 3), activation='relu',data_format='channels_first',
+                   padding='same')(pool2)
+    conv3 = Conv3D(int(256/downsize_filters_factor), (3, 3, 3), activation='relu',data_format='channels_first',
+                   padding='same')(conv3)
+    pool3 = MaxPooling3D(pool_size=pool_size, data_format='channels_first')(conv3)
+
+    conv4 = Conv3D(int(256/downsize_filters_factor), (3, 3, 3), activation='relu',data_format='channels_first',
+                   padding='same')(pool3)
+    conv4 = Conv3D(int(512/downsize_filters_factor), (3, 3, 3), activation='relu',data_format='channels_first',
+                   padding='same')(conv4)
+
+    up5 = get_upconv(pool_size=pool_size, deconvolution=deconvolution, depth=2,
+                     nb_filters=int(512/downsize_filters_factor), image_shape=input_shape[-3:])(conv4)
+    # print 'HELLO', up5.output_shape, conv3.output_shape
+    up5 = concatenate([up5, conv3], axis=1)
+    conv5 = Conv3D(int(256/downsize_filters_factor), (3, 3, 3), activation='relu', data_format='channels_first',padding='same')(up5)
+    conv5 = Conv3D(int(256/downsize_filters_factor), (3, 3, 3), activation='relu',data_format='channels_first',
+                   padding='same')(conv5)
+
+    up6 = get_upconv(pool_size=pool_size, deconvolution=deconvolution, depth=1,
+                     nb_filters=int(256/downsize_filters_factor),image_shape=input_shape[-3:])(conv5)
+    # print up6.output_shape, conv2.output_shape
+    up6 = concatenate([up6, conv2], axis=1)
+    conv6 = Conv3D(int(128/downsize_filters_factor), (3, 3, 3), activation='relu',data_format='channels_first', padding='same')(up6)
+    conv6 = Conv3D(int(128/downsize_filters_factor), (3, 3, 3), activation='relu',data_format='channels_first',
+                   padding='same')(conv6)
+
+    up7 = get_upconv(pool_size=pool_size, deconvolution=deconvolution, depth=0,
+                     nb_filters=int(128/downsize_filters_factor), image_shape=input_shape[-3:])(conv6)
+    up7 = concatenate([up7, conv1], axis=1)
+    conv7 = Conv3D(int(64/downsize_filters_factor), (3, 3, 3), activation='relu',data_format='channels_first', padding='same')(up7)
+    conv7 = Conv3D(int(64/downsize_filters_factor), (3, 3, 3), activation='relu',data_format='channels_first',
+                   padding='same', kernel_regularizer=regularizers.l2(0.01))(conv7)
+
+    conv8 = Conv3D(int(1), (1, 1, 1), data_format='channels_first',)(conv7)
+    model = Model(inputs=inputs, outputs=conv8)
 
     model.compile(optimizer=Adam(lr=initial_learning_rate), loss=msq_loss, metrics=[msq])
 
@@ -55,6 +103,48 @@ def load_old_model(model_file):
         print("Could not import Deconvolution3D. To use Deconvolution3D install keras-contrib.")
 
     return load_model(model_file, custom_objects=custom_objects)
+
+def compute_level_output_shape(filters, depth, pool_size, image_shape):
+    """
+    Each level has a particular output shape based on the number of filters used in that level and the depth or number 
+    of max pooling operations that have been done on the data at that point.
+    :param image_shape: shape of the 3d image.
+    :param pool_size: the pool_size parameter used in the max pooling operation.
+    :param filters: Number of filters used by the last node in a given level.
+    :param depth: The number of levels down in the U-shaped model a given node is.
+    :return: 5D vector of the shape of the output node 
+    """
+    if depth != 0:
+        output_image_shape = np.divide(image_shape, np.multiply(pool_size, depth)).tolist()
+    else:
+        output_image_shape = image_shape
+    return tuple([None, filters] + [int(x) for x in output_image_shape] )
+
+def get_upconv(depth, nb_filters, pool_size, image_shape, kernel_size=(2, 2, 2), strides=(2, 2, 2),
+               deconvolution=False):
+
+    print 'HELLO', compute_level_output_shape(filters=nb_filters, depth=depth,
+                                                                       pool_size=pool_size, image_shape=image_shape)
+    print compute_level_output_shape(filters=nb_filters,
+                                                                                       depth=depth+1,
+                                                                                       pool_size=pool_size,
+                                                                                       image_shape=image_shape)
+
+    if deconvolution and False:
+        try:
+            from keras_contrib.layers import Deconvolution3D
+        except ImportError:
+            raise ImportError("Install keras_contrib in order to use deconvolution. Otherwise set deconvolution=False.")
+
+        return Deconvolution3D(filters=nb_filters, kernel_size=kernel_size,
+                               output_shape=compute_level_output_shape(filters=nb_filters, depth=depth,
+                                                                       pool_size=pool_size, image_shape=image_shape),
+                               strides=strides, input_shape=compute_level_output_shape(filters=nb_filters,
+                                                                                       depth=depth+1,
+                                                                                       pool_size=pool_size,
+                                                                                       image_shape=image_shape))
+    else:
+        return UpSampling3D(size=pool_size, data_format='channels_first')
 
 if __name__ == '__main__':
 

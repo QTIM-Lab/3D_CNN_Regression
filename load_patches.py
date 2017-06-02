@@ -57,9 +57,10 @@ def write_patch_data_to_hdf5(image_files, data_storage, truth_storage, patch_sha
     total_patches = 0
     current_image_index = 0
     patches_per_image = int(np.ceil(patch_num/len(image_files)))
+    print len(image_files), patches_per_image, patch_num
     sample_images = read_image_files(image_files[0])
 
-    while total_patches < patch_num:
+    while total_patches < patch_num - 1:
 
         patch_data = extract_patch(sample_images, patch_shape)
 

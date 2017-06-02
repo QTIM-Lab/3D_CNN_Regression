@@ -21,8 +21,12 @@ def fetch_data_files(data_dir, input_modalities, input_groundtruth):
         subject_files = []
         for modality in input_modalities + input_groundtruth:
             target_file = glob.glob(os.path.join(subject_dir, '*' + modality + '*'))
-            subject_files.append(target_file[0])
-        data_files.append(tuple(subject_files))
+            try:
+                subject_files.append(target_file[0])
+            except:
+                break
+        if len(subject_files) == len(input_modalities) + len(input_groundtruth):
+            data_files.append(tuple(subject_files))
 
     return data_files
 

@@ -70,12 +70,13 @@ def run_validation_case(output_dir, model_file, data_file):
 
     data_file.close()
 
-def run_validation_case_patches(output_dir, model_file, data_file, patch_shape):
+def run_validation_case_patches(output_dir, model_object, model_file, data_file, patch_shape):
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    model = load_old_model(model_file)
+    # model = load_old_model(model_file)
+    model = model_object
 
     for case_num in xrange(data_file.root.data.shape[0]):
 
@@ -89,12 +90,8 @@ def run_validation_case_patches(output_dir, model_file, data_file, patch_shape):
 
         for corner, single_patch in patched_test_data:
 
-            print corner
-            # print 'PREDICTED CORNER:', corner
             prediction = model.predict(single_patch)
-            print 'PREDICTED SHAPE', prediction.shape
             insert_patch(repatched_image, prediction, corner)
-            print np.mean(repatched_image)
 
         save_numpy_2_nifti(np.squeeze(repatched_image), output_filepath=os.path.join(output_dir, 'TESTCASE_' + str(case_num).zfill(3) + '_PREDICT.nii.gz'))
 
@@ -119,7 +116,6 @@ def patchify_image(input_data, patch_shape):
         patch_slice = [slice(None)] + [slice(corner_dim, corner_dim+patch_shape[idx], 1) for idx, corner_dim in enumerate(corner)]
         patch = input_data[patch_slice]
         patch_list += [[corner[:], patch[:]]]
-        print corner, patch.shape
 
         for idx, corner_dim in enumerate(corner):
 
@@ -153,6 +149,11 @@ def insert_patch(input_data, patch, corner):
     input_data[patch_slice] = patch
 
     return
+
+def calculate_prediction_msq(output_dir):
+
+    """ Calculate mean-squared error for the predictions folder.
+    """
 
 if __name__ == '__main__':
     pass

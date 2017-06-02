@@ -12,7 +12,7 @@ def get_training_and_validation_generators(data_file, batch_size, training_keys_
 
     training_generator = data_generator(data_file, training_list, batch_size=batch_size)
 
-    validation_generator = data_generator(data_file, validation_list, batch_size=10)
+    validation_generator = data_generator(data_file, validation_list, batch_size=1)
     
     # Set the number of training and testing samples per epoch correctly
     num_training_steps = len(training_list)//batch_size
