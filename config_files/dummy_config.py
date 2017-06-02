@@ -8,14 +8,8 @@ config["test_dir"] = os.path.abspath("./dummy_data/test")
 config["hdf5_train"] = './hdf5_data/dummy_train.hdf5'
 config["hdf5_test"] = './hdf5_data/dummy_test.hdf5'
 
-<<<<<<< HEAD
 # Image Information
-config["image_shape"] = (5, 5, 5)
-=======
-# If doing patch-based, images may not be needed?
-# But for now....
-config["image_shape"] = (8,8,8)
->>>>>>> e2b103be5b4d5492e1ebca0ccaf6053190ff3f7d
+config["image_shape"] = (100, 100, 100)
 
 # Patch Information
 config['patches'] = True

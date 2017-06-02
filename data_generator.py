@@ -12,7 +12,7 @@ def get_training_and_validation_generators(data_file, batch_size, training_keys_
 
     training_generator = data_generator(data_file, training_list, batch_size=batch_size)
 
-    validation_generator = data_generator(data_file, validation_list, batch_size=1)
+    validation_generator = data_generator(data_file, validation_list, batch_size=10)
     
     # Set the number of training and testing samples per epoch correctly
     num_training_steps = len(training_list)//batch_size
@@ -60,7 +60,7 @@ def data_generator(data_file, index_list, batch_size=1):
         x_list = []
         y_list = []
         shuffle(index_list)
-        print index_list
+        # print index_list
         for index in index_list:
 
             add_data(x_list, y_list, data_file, index)

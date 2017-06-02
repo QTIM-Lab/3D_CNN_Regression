@@ -1,3 +1,5 @@
+from __future__ import division
+
 import os
 import glob
 
@@ -24,6 +26,7 @@ def write_patches_to_file(input_data_files, output_hdf5_filepath, image_shape, p
     write_patch_data_to_hdf5(input_data_files, data_storage, truth_storage, patch_shape=patch_shape, patch_num=patch_num, modality_num=modality_num)
     
     hdf5_file.close()
+
     return output_hdf5_filepath
 
 def create_patches_hdf5_file(output_filepath, modality_num, patch_num, patch_shape):
@@ -53,16 +56,15 @@ def write_patch_data_to_hdf5(image_files, data_storage, truth_storage, patch_sha
 
     total_patches = 0
     current_image_index = 0
-    patches_per_image = int(patch_num/len(image_files))
+    patches_per_image = int(np.ceil(patch_num/len(image_files)))
     sample_images = read_image_files(image_files[0])
-    print sample_images.shape
 
     while total_patches < patch_num:
 
         patch_data = extract_patch(sample_images, patch_shape)
 
-        data_storage.append(subject_data[:n_modalities][np.newaxis])
-        truth_storage.append(np.asarray(subject_data[n_modalities][np.newaxis][np.newaxis]))
+        data_storage.append(patch_data[:modality_num][np.newaxis])
+        truth_storage.append(np.asarray(patch_data[modality_num][np.newaxis][np.newaxis]))
 
         if (total_patches + 1) % patches_per_image == 0:
             current_image_index += 1
@@ -82,29 +84,27 @@ def extract_patch(input_image_stack, patch_shape, background_max_ratio=.5, mask_
     """
 
     background_patch = True
-    patch_vox_count = np.product(patch_shape)
+    patch_vox_count = float(np.product((input_image_stack.shape[0],) + patch_shape))
 
     while background_patch:
 
-        print input_image_stack.shape
         corner = [np.random.randint(0, max_dim) for max_dim in input_image_stack.shape[1:]]
-        patch_slice = [slice(None)] + [slice(corner, corner+patch_shape[idx], 1) for idx, corner in enumerate(corner)]
+        patch_slice = [slice(None)] + [slice(corner_dim, corner_dim+patch_shape[idx], 1) for idx, corner_dim in enumerate(corner)]
         patch = input_image_stack[patch_slice]
 
-        print corner
+        # print 'corner', corner
         pad_dims = [(0,0)]
-        print patch.shape
+        # print 'patch shape', patch.shape
         for idx, dim in enumerate(patch.shape[1:]):
-            pad_dims += [(0, dim-patch_shape[idx])]
+            pad_dims += [(0, patch_shape[idx]-dim)]
 
-        print pad_dims
+        # print 'padding dimensions', pad_dims
         patch = np.lib.pad(patch, tuple(pad_dims), 'edge')
 
-        if not patch_vox_count / (patch == 0).sum() > background_max_ratio:
+        if float((patch == 0).sum()) / patch_vox_count > background_max_ratio:
             background_patch = False
 
     return patch
-
 
 def read_image_files(image_files):
 

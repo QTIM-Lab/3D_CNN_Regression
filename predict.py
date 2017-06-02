@@ -54,15 +54,6 @@ def prediction_to_image(prediction, affine, label_map=False, threshold=0.5, labe
     return nib.Nifti1Image(data, affine)
 
 def run_validation_case(output_dir, model_file, data_file):
-    """
-    Runs a test case and writes predicted images to file.
-    :param test_index: Index from of the list of test cases to get an image prediction from.  
-    :param out_dir: Where to write prediction images.
-    :param output_label_map: If True, will write out a single image with one or more labels. Otherwise outputs
-    the (sigmoid) prediction values from the model.
-    :param threshold: If output_label_map is set to True, this threshold defines the value above which is 
-    considered a positive result and will be assigned a label.  
-    """
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -75,27 +66,93 @@ def run_validation_case(output_dir, model_file, data_file):
 
         save_numpy_2_nifti(np.squeeze(test_truth), output_filepath=os.path.join(output_dir, 'TESTCASE_' + str(case_num).zfill(3) + '_TRUTH.nii.gz'))
         prediction = model.predict(test_data)
-        print prediction.shape
         save_numpy_2_nifti(np.squeeze(prediction), output_filepath=os.path.join(output_dir, 'TESTCASE_' + str(case_num).zfill(3) + '_PREDICT.nii.gz'))
 
-        # for i, modality in enumerate(training_modalities):
-        #     image = nib.Nifti1Image(test_data[0, i], affine)
-        #     image.to_filename(os.path.join(out_dir, "data_{0}.nii.gz".format(modality)))
-
-        # test_truth = nib.Nifti1Image(data_file.root.truth[data_index][0], affine)
-        # test_truth.to_filename(os.path.join(out_dir, "truth.nii.gz"))
-
-    # fd = dg
-
-    # prediction = model.predict(test_data)
-    # prediction_image = prediction_to_image(prediction, affine, label_map=output_label_map, threshold=threshold, labels=labels)
-    # if isinstance(prediction_image, list):
-    #     for i, image in enumerate(prediction_image):
-    #         image.to_filename(os.path.join(out_dir, "prediction_{0}.nii.gz".format(i + 1)))
-    # else:
-    #     prediction_image.to_filename(os.path.join(out_dir, "prediction.nii.gz"))
-
     data_file.close()
+
+def run_validation_case_patches(output_dir, model_file, data_file, patch_shape):
+
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    model = load_old_model(model_file)
+
+    for case_num in xrange(data_file.root.data.shape[0]):
+
+        test_data = np.asarray([data_file.root.data[case_num]])
+        test_truth = np.asarray([data_file.root.truth[case_num]])
+
+        save_numpy_2_nifti(np.squeeze(test_truth), output_filepath=os.path.join(output_dir, 'TESTCASE_' + str(case_num).zfill(3) + '_TRUTH.nii.gz'))
+
+        patched_test_data = patchify_image(test_data, patch_shape)
+        repatched_image = np.zeros_like(test_truth)
+
+        for corner, single_patch in patched_test_data:
+
+            print corner
+            # print 'PREDICTED CORNER:', corner
+            prediction = model.predict(single_patch)
+            print 'PREDICTED SHAPE', prediction.shape
+            insert_patch(repatched_image, prediction, corner)
+            print np.mean(repatched_image)
+
+        save_numpy_2_nifti(np.squeeze(repatched_image), output_filepath=os.path.join(output_dir, 'TESTCASE_' + str(case_num).zfill(3) + '_PREDICT.nii.gz'))
+
+    data_file.close() 
+
+def patchify_image(input_data, patch_shape):
+
+    """ VERY wonky
+    """
+
+    print input_data.shape
+    # fd 
+
+    patch_shape = [input_data.shape[1]] + list(patch_shape)
+    patch_list = []
+    corner = [0] * len(input_data.shape[1:])
+    
+    finished = False
+
+    while not finished:
+
+        patch_slice = [slice(None)] + [slice(corner_dim, corner_dim+patch_shape[idx], 1) for idx, corner_dim in enumerate(corner)]
+        patch = input_data[patch_slice]
+        patch_list += [[corner[:], patch[:]]]
+        print corner, patch.shape
+
+        for idx, corner_dim in enumerate(corner):
+
+            # Advance corner stride
+            if idx == 0:
+                corner[idx] += patch_shape[idx]
+
+            # Finish patchification
+            if idx == len(corner) - 1 and corner[idx] == input_data.shape[-1]:
+                finished = True
+                continue
+
+            # Push down a dimension.
+            if corner[idx] == input_data.shape[idx+1]:
+                corner[idx] = 0
+                corner[idx+1] += patch_shape[idx+1]
+
+            # Reset patch at edge.
+            elif corner[idx] > input_data.shape[idx+1] - patch_shape[idx]:
+                corner[idx] = input_data.shape[idx+1] - patch_shape[idx]
+
+            # print corner
+
+    # print patch_list
+    return patch_list
+
+def insert_patch(input_data, patch, corner):
+
+    patch_shape = patch.shape[1:]
+    patch_slice = [slice(None)] + [slice(corner_dim, corner_dim+patch_shape[idx], 1) for idx, corner_dim in enumerate(corner)]
+    input_data[patch_slice] = patch
+
+    return
 
 if __name__ == '__main__':
     pass
