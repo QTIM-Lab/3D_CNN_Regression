@@ -6,17 +6,20 @@ import numpy as np
 
 from data_utils import pickle_dump, pickle_load
 
-def get_training_and_validation_generators(data_file, batch_size, training_keys_file, validation_keys_file, train_test_split=0.8, overwrite=False):
+def get_training_and_validation_generators(training_data_file, validation_data_file, batch_size, training_keys_file, validation_keys_file, train_test_split=0.8, overwrite=False):
 
-    training_list, validation_list = get_validation_split(data_file, data_split=train_test_split, overwrite=overwrite,training_file=training_keys_file, testing_file=validation_keys_file)
-
-    training_generator = data_generator(data_file, training_list, batch_size=batch_size)
-
-    validation_generator = data_generator(data_file, validation_list, batch_size=1)
-    
-    # Set the number of training and testing samples per epoch correctly
-    num_training_steps = len(training_list)//batch_size
-    num_validation_steps = len(validation_list)
+    if validation_data_file:
+        training_generator = data_generator(training_data_file, [], batch_size=batch_size)
+        validation_generator = data_generator(training_data_file, [], batch_size=1)
+        print batch_size, training_data_file.root.data.shape[0] //
+        num_training_steps = training_data_file.root.data.shape[0] // batch_size
+        num_validation_steps = validation_data_file.root.data.shape[0]
+    else:
+        training_list, validation_list = get_validation_split(training_data_file, data_split=train_test_split, overwrite=overwrite, training_file=training_keys_file, testing_file=validation_keys_file)
+        training_generator = data_generator(training_data_file, training_list, batch_size=batch_size)
+        validation_generator = data_generator(training_data_file, validation_list, batch_size=1)
+        num_training_steps = len(training_list) // batch_size
+        num_validation_steps = len(validation_list)    
 
     return training_generator, validation_generator, num_training_steps, num_validation_steps
 
@@ -25,9 +28,8 @@ def get_validation_split(data_file, training_file, testing_file, data_split=0.8,
 
     if overwrite or not os.path.exists(training_file):
 
-        print("Creating validation split...")
-        n_cases = data_file.root.data.shape[0]
-        sample_list = list(range(n_cases))
+        num_cases = data_file.root.data.shape[0]
+        sample_list = list(range(num_cases))
 
         training_list, testing_list = split_list(sample_list, split=data_split)
 
@@ -76,9 +78,6 @@ def add_data(x_list, y_list, data_file, index, augment=False):
 
     data = data_file.root.data[index]
     truth = data_file.root.truth[index, 0]
-
-    # if augment:
-    #     data, truth = augment_data(data, truth, data_file.root.affine)
 
     x_list.append(data)
     y_list.append([truth])

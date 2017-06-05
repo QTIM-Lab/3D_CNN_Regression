@@ -36,8 +36,12 @@ config = dict()
 # Data will be compressed in hdf5 format at these filepaths.
 config["train_dir"] = os.path.abspath("/eminas/PET_PREDICTION/Train")
 config["test_dir"] = os.path.abspath("/eminas/PET_PREDICTION/Test")
+config["validation_dir"] = os.path.abspath("/eminas/PET_Prediction/Validation")
+
+# Data will be saved to these hdf5 files.
 config["hdf5_train"] = './hdf5_data/FMS_train.hdf5'
 config["hdf5_test"] = './hdf5_data/FMS_test.hdf5'
+config["hdf5_validation"] = './hdf5_data/FMS_validation.hdf5'
 
 # Image Information
 config["image_shape"] = (256, 256, 208)
@@ -46,6 +50,7 @@ config["image_shape"] = (256, 256, 208)
 config['patches'] = True
 config['patch_shape'] = (8, 8, 8)
 config['train_patch_num'] = 300
+config['validation_patch_num'] = 200
 
 # Modalities. Always make input_groundtruth as list.
 config["input_modalities"] = ['MPRAGE_POST', 'FLAIR', 'T2SPACE_DL', 'T1Pre']

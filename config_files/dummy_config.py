@@ -4,7 +4,10 @@ config = dict()
 
 # Data will be compressed in hdf5 format at these filepaths.
 config["train_dir"] = os.path.abspath("./dummy_data/train")
+config["validation_dir"] = os.path.abspath("./dummy_data/validation")
 config["test_dir"] = os.path.abspath("./dummy_data/test")
+
+# Data saved to hdf5s at these filepaths...
 config["hdf5_train"] = './hdf5_data/dummy_train.hdf5'
 config["hdf5_test"] = './hdf5_data/dummy_test.hdf5'
 

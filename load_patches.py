@@ -9,7 +9,7 @@ import nibabel as nib
 
 from image_utils import nifti_2_numpy
 
-def write_patches_to_file(input_data_files, output_hdf5_filepath, image_shape, patch_num, patch_shape):
+def write_patches_to_file(input_data_files, input_validation_files, output_hdf5_filepath, image_shape, patch_num, patch_shape):
 
     # TODO: Modifiy this for multiple outputs, e.g.
     # in the DCE-MRI parameters case.
