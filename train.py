@@ -3,7 +3,7 @@ import os
 import math
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"   # see issue #152
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 from functools import partial
 from shutil import rmtree
@@ -19,10 +19,12 @@ from data_generator import get_training_and_validation_generators
 from data_utils import pickle_dump, pickle_load
 from predict import run_validation_case, run_validation_case_patches
 
-def run_regression(overwrite=False, delete=False, config_dict={}):
+def run_regression(overwrite=False, delete=False, config_dict={}, only_predict=False):
+
+    validation_files = []
 
     # Create required directories
-    for directory in [config['model_file'], config['hdf5_train'], config['hdf5_test'], config['predictions_folder']]:
+    for directory in [config['model_file'], config['hdf5_train'], config['hdf5_test'], config['hdf5_validation'], config['predictions_folder']]:
         directory = os.path.abspath(directory)
         if not os.path.isdir(directory):
             directory = os.path.dirname(directory)
@@ -43,6 +45,7 @@ def run_regression(overwrite=False, delete=False, config_dict={}):
     if overwrite or not os.path.exists(os.path.abspath(config["hdf5_validation"])):
         if config['validation_dir'] != '':
             validation_files = fetch_data_files(config['validation_dir'], config['input_modalities'], config['input_groundtruth'])
+            print validation_files
             if config['patches']:
                 write_patches_to_file(validation_files, config['hdf5_validation'], config['image_shape'], patch_num=config['validation_patch_num'], patch_shape=config['patch_shape'])
             else:
@@ -56,7 +59,7 @@ def run_regression(overwrite=False, delete=False, config_dict={}):
         write_data_to_file(testing_files, config["hdf5_test"], config['image_shape'])  
 
     # Open up all relevant hdf5 files..
-    if validation_data:
+    if validation_files:
         open_validation_hdf5 = tables.open_file(config["hdf5_validation"], "r")
     else:
         open_validation_hdf5 = []
@@ -69,14 +72,15 @@ def run_regression(overwrite=False, delete=False, config_dict={}):
         model = regression_model_3d((len(config['input_modalities']),) + config['patch_shape'], downsize_filters_factor=config['downsize_filters_factor'], initial_learning_rate=config['initial_learning_rate'])
 
     # Get training and validation generators, either split randomly from the testing data or from separate hdf5 files.
-    train_generator, validation_generator, num_train_steps, num_test_steps = get_training_and_validation_generators(training_data_file=open_train_hdf5, training_validation_file=open_validation_hdf5, batch_size=config["batch_size"], train_test_split=config["train_test_split"], overwrite=overwrite, validation_keys_file=config["validation_file"], training_keys_file=config["training_file"])
+    train_generator, validation_generator, num_train_steps, num_test_steps = get_training_and_validation_generators(training_data_file=open_train_hdf5, validation_data_file=open_validation_hdf5, batch_size=config["batch_size"], train_test_split=config["train_test_split"], overwrite=overwrite, validation_keys_file=config["validation_file"], training_keys_file=config["training_file"])
 
     # Train the model!
-    train_model(model=model, model_file=config["model_file"], training_generator=train_generator, validation_generator=validation_generator, steps_per_epoch=num_train_steps, validation_steps=num_test_steps, initial_learning_rate=config["initial_learning_rate"], learning_rate_drop=config["learning_rate_drop"], learning_rate_epochs=config["decay_learning_rate_every_x_epochs"], n_epochs=config["n_epochs"])
+    if not only_predict:
+        train_model(model=model, model_file=config["model_file"], training_generator=train_generator, validation_generator=validation_generator, steps_per_epoch=num_train_steps, validation_steps=num_test_steps, initial_learning_rate=config["initial_learning_rate"], learning_rate_drop=config["learning_rate_drop"], learning_rate_epochs=config["decay_learning_rate_every_x_epochs"], n_epochs=config["n_epochs"])
 
     # Close training and validation files, no longer needed.
     open_train_hdf5.close()
-    if validation_data:
+    if validation_files:
         open_validation_hdf5.close()
 
     # run_validation_case(output_dir=config['predictions_folder'], model_file=config['model_file'], data_file=open_test_hdf5)
@@ -113,6 +117,5 @@ def get_callbacks(model_file, initial_learning_rate, learning_rate_drop, learnin
     scheduler = LearningRateScheduler(partial(step_decay, initial_lrate=initial_learning_rate, drop=learning_rate_drop, epochs_drop=learning_rate_epochs))
     return [model_checkpoint, logger, history, scheduler]
 
-
 if __name__ == '__main__':
-    run_regression(overwrite=True)
+    run_regression(overwrite=True, only_predict=False)

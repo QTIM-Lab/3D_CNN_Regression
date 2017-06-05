@@ -36,41 +36,43 @@ config = dict()
 # Data will be compressed in hdf5 format at these filepaths.
 config["train_dir"] = os.path.abspath("/eminas/PET_PREDICTION/Train")
 config["test_dir"] = os.path.abspath("/eminas/PET_PREDICTION/Test")
-config["validation_dir"] = os.path.abspath("/eminas/PET_Prediction/Validation")
+config["validation_dir"] = os.path.abspath("/eminas/PET_PREDICTION/Validation")
 
 # Data will be saved to these hdf5 files.
 config["hdf5_train"] = './hdf5_data/FMS_train.hdf5'
 config["hdf5_test"] = './hdf5_data/FMS_test.hdf5'
 config["hdf5_validation"] = './hdf5_data/FMS_validation.hdf5'
 
+# If you want to preserve automated training/validation splits..
+config["training_file"] = os.path.abspath("./hdf5_data/training_ids.pkl")
+config["validation_file"] = os.path.abspath("./hdf5_data/validation_ids.pkl")
+
 # Image Information
 config["image_shape"] = (256, 256, 208)
 
 # Patch Information
 config['patches'] = True
-config['patch_shape'] = (8, 8, 8)
-config['train_patch_num'] = 300
-config['validation_patch_num'] = 200
+config['patch_shape'] = (16, 16, 16)
+config['train_patch_num'] = 600
+config['validation_patch_num'] = 300
 
 # Modalities. Always make input_groundtruth as list.
-config["input_modalities"] = ['MPRAGE_POST', 'FLAIR', 'T2SPACE_DL', 'T1Pre']
+config["input_modalities"] = ['MPRAGE_POST', 'FLAIR_r_T2', 'T2SPACE_DL', 'T1Pre']
 config["input_groundtruth"] = ['SUV']
 
 # Path to save model.
 config["model_file"] = "/home/administrator/projects/3D_CNN_Regression/model_files/FMS_model.h5"
 
 # Model parameters
-config["downsize_filters_factor"] = 8
+config["downsize_filters_factor"] = 1
 config["decay_learning_rate_every_x_epochs"] = 10
 config["initial_learning_rate"] = 0.001
 config["learning_rate_drop"] = 0.9
-config["n_epochs"] = 20
+config["n_epochs"] = 200
 
 # Model training parameters
 config["train_test_split"] = .8
-config["batch_size"] = 5
-config["training_file"] = os.path.abspath("./hdf5_data/training_ids.pkl")
-config["validation_file"] = os.path.abspath("./hdf5_data/validation_ids.pkl")
+config["batch_size"] = 50
 
 # Model testing parameters
 config['predictions_folder'] = os.path.abspath('./predictions')

@@ -57,7 +57,6 @@ def regression_model_3d(input_shape, downsize_filters_factor=1, pool_size=(2, 2,
 
     up5 = get_upconv(pool_size=pool_size, deconvolution=deconvolution, depth=2,
                      nb_filters=int(512/downsize_filters_factor), image_shape=input_shape[-3:])(conv4)
-    # print 'HELLO', up5.output_shape, conv3.output_shape
     up5 = concatenate([up5, conv3], axis=1)
     conv5 = Conv3D(int(256/downsize_filters_factor), (3, 3, 3), activation='relu', data_format='channels_first',padding='same')(up5)
     conv5 = Conv3D(int(256/downsize_filters_factor), (3, 3, 3), activation='relu',data_format='channels_first',
@@ -65,7 +64,6 @@ def regression_model_3d(input_shape, downsize_filters_factor=1, pool_size=(2, 2,
 
     up6 = get_upconv(pool_size=pool_size, deconvolution=deconvolution, depth=1,
                      nb_filters=int(256/downsize_filters_factor),image_shape=input_shape[-3:])(conv5)
-    # print up6.output_shape, conv2.output_shape
     up6 = concatenate([up6, conv2], axis=1)
     conv6 = Conv3D(int(128/downsize_filters_factor), (3, 3, 3), activation='relu',data_format='channels_first', padding='same')(up6)
     conv6 = Conv3D(int(128/downsize_filters_factor), (3, 3, 3), activation='relu',data_format='channels_first',
@@ -123,12 +121,7 @@ def compute_level_output_shape(filters, depth, pool_size, image_shape):
 def get_upconv(depth, nb_filters, pool_size, image_shape, kernel_size=(2, 2, 2), strides=(2, 2, 2),
                deconvolution=False):
 
-    print 'HELLO', compute_level_output_shape(filters=nb_filters, depth=depth,
-                                                                       pool_size=pool_size, image_shape=image_shape)
-    print compute_level_output_shape(filters=nb_filters,
-                                                                                       depth=depth+1,
-                                                                                       pool_size=pool_size,
-                                                                                       image_shape=image_shape)
+    print compute_level_output_shape(filters=nb_filters, depth=depth+1, pool_size=pool_size, image_shape=image_shape)
 
     if deconvolution and False:
         try:

@@ -9,7 +9,7 @@ import nibabel as nib
 
 from image_utils import nifti_2_numpy
 
-def write_patches_to_file(input_data_files, input_validation_files, output_hdf5_filepath, image_shape, patch_num, patch_shape):
+def write_patches_to_file(input_data_files, output_hdf5_filepath, image_shape, patch_num, patch_shape):
 
     # TODO: Modifiy this for multiple outputs, e.g.
     # in the DCE-MRI parameters case.
@@ -60,7 +60,7 @@ def write_patch_data_to_hdf5(image_files, data_storage, truth_storage, patch_sha
     print len(image_files), patches_per_image, patch_num
     sample_images = read_image_files(image_files[0])
 
-    while total_patches < patch_num - 1:
+    while total_patches < patch_num:
 
         patch_data = extract_patch(sample_images, patch_shape)
 
@@ -69,7 +69,8 @@ def write_patch_data_to_hdf5(image_files, data_storage, truth_storage, patch_sha
 
         if (total_patches + 1) % patches_per_image == 0:
             current_image_index += 1
-            sample_images = read_image_files(image_files[current_image_index])
+            if not current_image_index >= len(image_files):
+                sample_images = read_image_files(image_files[current_image_index])
 
         total_patches += 1
 
@@ -85,7 +86,8 @@ def extract_patch(input_image_stack, patch_shape, background_max_ratio=.5, mask_
     """
 
     background_patch = True
-    patch_vox_count = float(np.product((input_image_stack.shape[0],) + patch_shape))
+    # patch_vox_count = float(np.product((input_image_stack.shape[0],) + patch_shape))
+    patch_vox_count = float(np.product(patch_shape))
 
     while background_patch:
 
@@ -102,8 +104,11 @@ def extract_patch(input_image_stack, patch_shape, background_max_ratio=.5, mask_
         # print 'padding dimensions', pad_dims
         patch = np.lib.pad(patch, tuple(pad_dims), 'edge')
 
-        if float((patch == 0).sum()) / patch_vox_count > background_max_ratio:
-            background_patch = False
+        # if float((patch == 0).sum()) / patch_vox_count < background_max_ratio:
+            # background_patch = False
+
+        if float((patch[-1,...] <= .4).sum()) / patch_vox_count < background_max_ratio:
+            background_patch = False    
 
     return patch
 

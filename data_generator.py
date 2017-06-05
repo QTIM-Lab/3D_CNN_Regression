@@ -9,9 +9,9 @@ from data_utils import pickle_dump, pickle_load
 def get_training_and_validation_generators(training_data_file, validation_data_file, batch_size, training_keys_file, validation_keys_file, train_test_split=0.8, overwrite=False):
 
     if validation_data_file:
-        training_generator = data_generator(training_data_file, [], batch_size=batch_size)
-        validation_generator = data_generator(training_data_file, [], batch_size=1)
-        print batch_size, training_data_file.root.data.shape[0] //
+        training_generator = data_generator(training_data_file, range(training_data_file.root.data.shape[0]), batch_size=batch_size)
+        validation_generator = data_generator(training_data_file, range(validation_data_file.root.data.shape[0]), batch_size=1)
+        print 'BATCH SIZE CHECK', batch_size, training_data_file.root.data.shape[0]
         num_training_steps = training_data_file.root.data.shape[0] // batch_size
         num_validation_steps = validation_data_file.root.data.shape[0]
     else:
@@ -62,7 +62,6 @@ def data_generator(data_file, index_list, batch_size=1):
         x_list = []
         y_list = []
         shuffle(index_list)
-        # print index_list
         for index in index_list:
 
             add_data(x_list, y_list, data_file, index)
