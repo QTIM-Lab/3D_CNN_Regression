@@ -10,7 +10,7 @@ def get_training_and_validation_generators(training_data_file, validation_data_f
 
     if validation_data_file:
         training_generator = data_generator(training_data_file, range(training_data_file.root.data.shape[0]), batch_size=batch_size)
-        validation_generator = data_generator(training_data_file, range(validation_data_file.root.data.shape[0]), batch_size=1)
+        validation_generator = val_data_generator(training_data_file, range(validation_data_file.root.data.shape[0]), batch_size=1)
         print 'BATCH SIZE CHECK', batch_size, training_data_file.root.data.shape[0]
         num_training_steps = training_data_file.root.data.shape[0] // batch_size
         num_validation_steps = validation_data_file.root.data.shape[0]
@@ -71,6 +71,30 @@ def data_generator(data_file, index_list, batch_size=1):
                 yield convert_data(x_list, y_list)
                 x_list = []
                 y_list = []
+
+def val_data_generator(data_file, index_list, batch_size=1):
+
+    """ TODO: Investigate how generators even work?! And yield.
+    """
+
+    print 'GENERATED!'
+
+    while True:
+        x_list = []
+        y_list = []
+        shuffle(index_list)
+        for index in index_list:
+
+            add_data(x_list, y_list, data_file, index)
+
+            # print 'VALIDATION', len(x_list), index, batch_size
+
+            if len(x_list) == batch_size:
+
+                yield convert_data(x_list, y_list)
+                x_list = []
+                y_list = []
+
 
 
 def add_data(x_list, y_list, data_file, index, augment=False):

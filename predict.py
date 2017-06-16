@@ -14,23 +14,18 @@ from image_utils import save_numpy_2_nifti
 def get_test_indices(testing_file):
     return pickle_load(testing_file)
 
-
 def predict_from_data_file(model, open_data_file, index):
     return model.predict(open_data_file.root.data[index])
-
 
 def predict_and_get_image(model, data, affine):
     return nib.Nifti1Image(model.predict(data)[0, 0], affine)
 
-
 def predict_from_data_file_and_get_image(model, open_data_file, index):
     return predict_and_get_image(model, open_data_file.root.data[index], open_data_file.root.affine)
-
 
 def predict_from_data_file_and_write_image(model, open_data_file, index, out_file):
     image = predict_from_data_file_and_get_image(model, open_data_file, index)
     image.to_filename(out_file)
-
 
 def prediction_to_image(prediction, affine, label_map=False, threshold=0.5, labels=None):
     if prediction.shape[1] == 1:
@@ -70,7 +65,7 @@ def run_validation_case(output_dir, model_file, data_file):
 
     data_file.close()
 
-def run_validation_case_patches(output_dir, model_object, model_file, data_file, patch_shape, repetitions=16):
+def run_validation_case_patches(output_dir, model_object, model_file, data_file, patch_shape, repetitions=16, test_batch=75):
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -89,31 +84,40 @@ def run_validation_case_patches(output_dir, model_object, model_file, data_file,
 
         final_image = np.zeros_like(test_truth)
 
+        print 'TESTCASE_' + str(case_num).zfill(3) + '_MODALITY_' + str(modality_num) + '.nii.gz'
+
         for rep_idx in xrange(repetitions):
 
-            print rep_idx
+            print 'REPETITION..', rep_idx
 
             offset_slice = [slice(None)]*2 + [slice(rep_idx, None, 1)] * (test_data.ndim - 2)
             repatched_image = np.zeros_like(test_truth[offset_slice])
-            print test_data[offset_slice].shape
-            patched_test_data = patchify_image(test_data[offset_slice], [test_data[offset_slice].shape[1]] + list(patch_shape))
+            corners_list = patchify_image(test_data[offset_slice], [test_data[offset_slice].shape[1]] + list(patch_shape))
 
-            for corner, single_patch in patched_test_data:
+            for corner_list_idx in xrange(0, len(corners_list), test_batch):
 
-                prediction = model.predict(single_patch)
-                insert_patch(repatched_image, prediction, corner)
+                corner_batch = corners_list[corner_list_idx:corner_list_idx+test_batch]
+                input_patches = grab_patch(test_data[offset_slice], corners_list[corner_list_idx:corner_list_idx+test_batch], patch_shape)
+                prediction = model.predict(input_patches)
+
+                for corner_idx, corner in enumerate(corner_batch):
+                    insert_patch(repatched_image, prediction[corner_idx, ...], corner)
 
             if rep_idx == 0:
                 final_image = np.copy(repatched_image)
             else:
                 final_image[offset_slice] = final_image[offset_slice] + (1.0 / (rep_idx)) * (repatched_image - final_image[offset_slice])
-            print final_image.shape
+        
+        print np.sum(final_image)
 
-        save_numpy_2_nifti(np.squeeze(final_image), output_filepath=os.path.join(output_dir, 'TESTCASE_' + str(case_num).zfill(3) + '_PREDICT.nii.gz'))
+        final_image = np.around(np.squeeze(final_image))
+        # final_image[final_image < 3] == 0
+
+        save_numpy_2_nifti(final_image, output_filepath=os.path.join(output_dir, 'TESTCASE_' + str(case_num).zfill(3) + '_PREDICT.nii.gz'))
 
     data_file.close() 
 
-def patchify_image(input_data, patch_shape, offset=(0,0,0,0), batch_dim=True):
+def patchify_image(input_data, patch_shape, offset=(0,0,0,0), batch_dim=True, return_patches=False):
 
     """ VERY wonky. Patchs an image of arbitrary dimension, but
         has some interesting assumptions built-in about batch sizes,
@@ -122,32 +126,23 @@ def patchify_image(input_data, patch_shape, offset=(0,0,0,0), batch_dim=True):
         TODO: Make this function able to iterate forward or backward.
     """
 
-    print input_data.shape
-
     corner = [0] * len(input_data.shape[1:])
-    patch = grab_patch(input_data, corner, patch_shape)
-    patch_list = [[corner[:], patch[:]]]
 
-    # # Make this a bit more flexible.
-    # if len(offset) != len(input_data.shape[1:]):
-    #     print 'Offset dimensions must match input dimensions. Returning [].'
-    #     return []
-
-    # # Be friendly to offsets larger than dimensions of the patch..
-    # for offset_idx, offset_distance in enumerate(offset):
-    #     offset[offset_idx] = offset_distance % patch_shape[offset_idx]
-
-    # if offset != tuple([0] * len(input_data.shape[1:])):
-
-
-    # for rep_idx in xrange(repetitions):
+    if return_patches:
+        patch = grab_patch(input_data, corner, patch_shape)
+        patch_list = [[corner[:], patch[:]]]
+    else:
+        patch_list = [corner[:]]
 
     finished = False
 
     while not finished:
 
-        patch = grab_patch(input_data, corner, patch_shape)
-        patch_list += [[corner[:], patch[:]]]
+        if return_patches:
+            patch = grab_patch(input_data, corner, patch_shape)
+            patch_list += [[corner[:], patch[:]]]
+        else:
+            patch_list += [corner[:]]
 
         for idx, corner_dim in enumerate(corner):
 
@@ -169,24 +164,26 @@ def patchify_image(input_data, patch_shape, offset=(0,0,0,0), batch_dim=True):
             elif corner[idx] > input_data.shape[idx+1] - patch_shape[idx]:
                 corner[idx] = input_data.shape[idx+1] - patch_shape[idx]
 
-            # print corner
-
-    # print patch_list
     return patch_list
 
-def grab_patch(input_data, corner, patch_shape):
+def grab_patch(input_data, corner_list, patch_shape):
 
-    """ Given a corner coordinate, a patch_shape, and some input_data, returns a patch.
+    """ Given a corner coordinate, a patch_shape, and some input_data, returns a patch or array of patches.
     """
 
-    patch_slice = [slice(None)] + [slice(corner_dim, corner_dim+patch_shape[idx], 1) for idx, corner_dim in enumerate(corner)]
-    return input_data[patch_slice]
+    output_patches = np.zeros(((len(corner_list),input_data.shape[1]) + patch_shape))
+
+    for corner_idx, corner in enumerate(corner_list):
+        output_slice = [slice(None)]*2 + [slice(corner_dim, corner_dim+patch_shape[idx], 1) for idx, corner_dim in enumerate(corner[1:])]
+        output_patches[corner_idx, ...] = input_data[output_slice]
+
+    return output_patches
 
 
 def insert_patch(input_data, patch, corner):
 
     patch_shape = patch.shape[1:]
-    patch_slice = [slice(None)] + [slice(corner_dim, corner_dim+patch_shape[idx], 1) for idx, corner_dim in enumerate(corner)]
+    patch_slice = [slice(None)]*2 + [slice(corner_dim, corner_dim+patch_shape[idx], 1) for idx, corner_dim in enumerate(corner[1:])]
     input_data[patch_slice] = patch
 
     return

@@ -13,7 +13,7 @@ try:
 except ImportError:
     from keras.layers.merge import concatenate
 
-def regression_model_3d(input_shape, downsize_filters_factor=1, pool_size=(2, 2, 2), initial_learning_rate=0.00001, convolutions=4, dropout=.25, filter_shape=(3,3,3), deconvolution=True):
+def regression_model_3d(input_shape, downsize_filters_factor=1, pool_size=(2, 2, 2), initial_learning_rate=0.00001, convolutions=4, dropout=.25, filter_shape=(3,3,3), num_outputs=1, deconvolution=True, regression=True):
 
     inputs = Input(input_shape)
     # inputs = Input((1,32,32,32,4))
@@ -74,12 +74,18 @@ def regression_model_3d(input_shape, downsize_filters_factor=1, pool_size=(2, 2,
     up7 = concatenate([up7, conv1], axis=1)
     conv7 = Conv3D(int(64/downsize_filters_factor), (3, 3, 3), activation='relu',data_format='channels_first', padding='same')(up7)
     conv7 = Conv3D(int(64/downsize_filters_factor), (3, 3, 3), activation='relu',data_format='channels_first',
-                   padding='same', kernel_regularizer=regularizers.l2(0.01))(conv7)
+                   padding='same')(conv7)
 
-    conv8 = Conv3D(int(1), (1, 1, 1), data_format='channels_first',)(conv7)
-    model = Model(inputs=inputs, outputs=conv8)
+    conv8 = Conv3D(int(num_outputs), (1, 1, 1), data_format='channels_first',)(conv7)
 
-    model.compile(optimizer=Adam(lr=initial_learning_rate), loss=msq_loss, metrics=[msq])
+    if regression:
+        act = Activation('relu')(conv8)
+        model = Model(inputs=inputs, outputs=act)
+        model.compile(optimizer=Adam(lr=initial_learning_rate), loss=msq_loss, metrics=[msq])
+    else:
+        act = Activation('sigmoid')(conv8)
+        model = Model(inputs=inputs, outputs=act)
+        model.compile(optimizer=Adam(lr=initial_learning_rate), loss=dice_coef_loss, metrics=[dice_coef])
 
     return model
 
@@ -89,10 +95,20 @@ def msq(y_true, y_pred):
 def msq_loss(y_true, y_pred):
     return msq(y_true, y_pred)
 
+def dice_coef(y_true, y_pred, smooth=1.):
+    y_true_f = K.flatten(y_true)
+    y_pred_f = K.flatten(y_pred)
+    intersection = K.sum(y_true_f * y_pred_f)
+    return (2. * intersection + smooth) / (K.sum(y_true_f) + K.sum(y_pred_f) + smooth)
+
+def dice_coef_loss(y_true, y_pred):
+    return -dice_coef(y_true, y_pred)
+
 def load_old_model(model_file):
     print("Loading pre-trained model")
 
-    custom_objects = {'msq': msq, 'msq_loss': msq_loss}
+    # custom_objects = {'msq': msq, 'msq_loss': msq_loss}
+    custom_objects = {'dice_coef_loss': dice_coef_loss, 'dice_coef': dice_coef, 'msq': msq, 'msq_loss': msq_loss}
 
     try:
         from keras_contrib.layers import Deconvolution3D

@@ -34,9 +34,9 @@ import os
 config = dict()
 
 # Data will be compressed in hdf5 format at these filepaths.
-config["train_dir"] = os.path.abspath("/eminas/PET_PREDICTION/Train")
-config["test_dir"] = os.path.abspath("/eminas/PET_PREDICTION/Test")
-config["validation_dir"] = os.path.abspath("/eminas/PET_PREDICTION/Validation")
+config["train_dir"] = 
+config["test_dir"] = 
+config["validation_dir"] = 
 
 # Data will be saved to these hdf5 files.
 config["hdf5_train"] = './hdf5_data/FMS_train.hdf5'
@@ -61,7 +61,7 @@ config["input_modalities"] = ['MPRAGE_POST', 'FLAIR_r_T2', 'T2SPACE_DL', 'T1Pre'
 config["input_groundtruth"] = ['SUV']
 
 # Path to save model.
-config["model_file"] = "/home/administrator/projects/3D_CNN_Regression/model_files/FMS_model.h5"
+config["model_file"] = 
 
 # Model parameters
 config["downsize_filters_factor"] = 1
