@@ -23,6 +23,7 @@ config["overwrite_train_val_split"] = False
 config["overwrite_model"] = False
 config["overwrite_training"] = False
 config["overwrite_test_data"] = False
+config["overwrite_prediction"] = True
 
 # Image Information
 # config["image_shape"] = (240, 240, 155)

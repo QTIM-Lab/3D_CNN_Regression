@@ -23,7 +23,6 @@ def get_training_and_validation_generators(training_data_file, validation_data_f
 
     return training_generator, validation_generator, num_training_steps, num_validation_steps
 
-
 def get_validation_split(data_file, training_file, testing_file, data_split=0.8, overwrite=False):
 
     if overwrite or not os.path.exists(training_file):
