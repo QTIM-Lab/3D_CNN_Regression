@@ -8,62 +8,57 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 from functools import partial
 from shutil import rmtree
 
-# from keras.callbacks import ModelCheckpoint, CSVLogger, Callback, LearningRateScheduler
+from keras.callbacks import ModelCheckpoint, CSVLogger, Callback, LearningRateScheduler
 
 from config_files.brats_config import config
 
-# from model import regression_model_3d, load_old_model
+from model import regression_model_3d, load_old_model
 from load_data import DataCollection
-from data_generator import get_training_and_validation_generators
+from data_generator import get_data_generator
 from data_utils import pickle_dump, pickle_load
 # from predict import run_validation_case, run_validation_case_patches
 from augment import *
 
 def run_regression(overwrite=False, delete=False, config_dict={}, only_predict=False):
 
-    validation_files = []
+    create_directories(delete=delete)
 
-    # Create required directories
-    for directory in [config['model_file'], config['hdf5_train'], config['hdf5_test'], config['hdf5_validation'], config['predictions_folder']]:
-        directory = os.path.abspath(directory)
-        if not os.path.isdir(directory):
-            directory = os.path.dirname(directory)
-        if delete:
-            rmtree(directory)
-        if not os.path.exists(directory):
-            os.makedirs(directory)
+    validation_files = []
 
     # Load training and validation data.
     if config['overwrite_trainval_data'] or not os.path.exists(os.path.abspath(config["hdf5_train"])):
 
-        modality_dict = {'input_modalities': ['FLAIR_pp', 'T2_pp', 'T1c_pp', 'T1_pp'],
+        modality_dict = {'input_modalities': ['*FLAIR_pp*', '*T2_pp*', '*T1c_pp*', '*T1_pp*'],
                         'ground_truth': ['*ROI_pp_edema_nonenhancing_tumor_necrosis*']}
+
+        # Find Data
+        validation_data_collection = DataCollection(config['validation_dir'], modality_dict)
+        validation_data_collection.fill_data_groups()
 
         training_data_collection = DataCollection(config['train_dir'], modality_dict)
         training_data_collection.fill_data_groups()
 
-        for var in vars(training_data_collection):
-            print var, vars(training_data_collection)[var]
+        # Training
+        patch_extraction_augmentation = ExtractPatches(config['patch_shape'], config['patch_extraction_conditions'])
+        patch_augmentation = AugmentationGroup({'input_modalities': patch_extraction_augmentation, 'ground_truth': patch_extraction_augmentation}, multiplier=10)
+        training_data_collection.append_augmentation(patch_augmentation)
 
-        print training_data_collection.data_groups['ground_truth'].data
-        # print vars(training_data_collection)
+        # small_patch_extraction_augmentation = ExtractPatches((2,2,2), None)
+        # small_patch_augmentation = AugmentationGroup({'input_modalities': small_patch_extraction_augmentation, 'ground_truth': small_patch_extraction_augmentation}, multiplier=10)
+        # training_data_collection.append_augmentation(small_patch_augmentation)
 
-        # training_data_files, training_groundtruth_files = fetch_data_files(config['train_dir'], config['input_modalities'], config['input_groundtruth'])
-        # write_data_to_file(training_data_files, training_groundtruth_files, config['hdf5_train'], config['image_shape'], patches=config['patches'], patch_num=config['train_patch_num'], patch_shape=config['patch_shape'], patch_extraction_conditions=config['patch_extraction_conditions'])
+        training_data_collection.write_data_to_file(output_filepath = config['hdf5_train'])
 
-    # Optionally, load validation data.
-    if config['overwrite_trainval_data'] or not os.path.exists(os.path.abspath(config["hdf5_validation"])):
-        if config['validation_dir'] != '':
-            validation_data_files, validation_groundtruth_files = fetch_data_files(config['validation_dir'], config['input_modalities'], config['input_groundtruth'])
-            write_data_to_file(validation_data_files, validation_groundtruth_files, config['hdf5_validation'], config['image_shape'], patches=config['patches'], patch_num=config['validation_patch_num'], patch_shape=config['patch_shape'], patch_extraction_conditions=config['patch_extraction_conditions'])
-        else:
-            validation_files = []
+        # Validation
+        patch_extraction_augmentation = ExtractPatches(config['patch_shape'], config['patch_extraction_conditions'])
+        patch_augmentation = AugmentationGroup({'input_modalities': patch_extraction_augmentation, 'ground_truth': patch_extraction_augmentation}, multiplier=10)
+        validation_data_collection.append_augmentation(patch_augmentation)
 
-    # Open up all relevant hdf5 files..
-    if os.path.exists(os.path.abspath(config["hdf5_validation"])):
-        open_validation_hdf5 = tables.open_file(config["hdf5_validation"], "r")
-    else:
-        open_validation_hdf5 = []
+        # small_patch_extraction_augmentation = ExtractPatches((2,2,2), None)
+        # small_patch_augmentation = AugmentationGroup({'input_modalities': small_patch_extraction_augmentation, 'ground_truth': small_patch_extraction_augmentation}, multiplier=10)
+        # validation_data_collection.append_augmentation(small_patch_augmentation)
+
+        validation_data_collection.write_data_to_file(output_filepath = config['hdf5_validation'])
 
     # Create a new model if necessary. Preferably, load an existing one.
     if not config["overwrite_model"] and os.path.exists(config["model_file"]):
@@ -74,12 +69,20 @@ def run_regression(overwrite=False, delete=False, config_dict={}, only_predict=F
     # Create data generators and train the model.
     if config["overwrite_training"]:
         
-        open_train_hdf5 = tables.open_file(config["hdf5_train"], "r")
-
         # Get training and validation generators, either split randomly from the training data or from separate hdf5 files.
-        train_generator, validation_generator, num_train_steps, num_test_steps = get_training_and_validation_generators(training_data_file=open_train_hdf5, validation_data_file=open_validation_hdf5, batch_size=config["batch_size"], train_test_split=config["train_test_split"], overwrite=config["overwrite_train_val_split"], validation_keys_file=config["validation_file"], training_keys_file=config["training_file"])
-        
-        train_model(model=model, model_file=config["model_file"], training_generator=train_generator, validation_generator=validation_generator, steps_per_epoch=num_train_steps, validation_steps=num_test_steps, initial_learning_rate=config["initial_learning_rate"], learning_rate_drop=config["learning_rate_drop"], learning_rate_epochs=config["decay_learning_rate_every_x_epochs"], n_epochs=config["n_epochs"])
+        if os.path.exists(os.path.abspath(config["hdf5_validation"])):
+            open_validation_hdf5 = tables.open_file(config["hdf5_validation"], "r")
+            validation_generator, num_validation_steps = get_data_generator(open_validation_hdf5, batch_size=1, data_labels = ['input_modalities', 'ground_truth'])
+        else:
+            open_validation_hdf5 = []
+
+        open_train_hdf5 = tables.open_file(config["hdf5_train"], "r")
+        train_generator, num_train_steps = get_data_generator(open_train_hdf5, batch_size=config["batch_size"], data_labels = ['input_modalities', 'ground_truth'])
+
+        print num_validation_steps, num_train_steps
+
+        # Train model.. TODO account for no validation
+        train_model(model=model, model_file=config["model_file"], training_generator=train_generator, validation_generator=validation_generator, steps_per_epoch=num_train_steps, validation_steps=num_validation_steps, initial_learning_rate=config["initial_learning_rate"], learning_rate_drop=config["learning_rate_drop"], learning_rate_epochs=config["decay_learning_rate_every_x_epochs"], n_epochs=config["n_epochs"])
 
         # Close training and validation files, no longer needed.
         open_train_hdf5.close()
@@ -98,36 +101,48 @@ def run_regression(overwrite=False, delete=False, config_dict={}, only_predict=F
         # run_validation_case(output_dir=config['predictions_folder'], model_file=config['model_file'], data_file=open_test_hdf5)
         run_validation_case_patches(output_dir=config['predictions_folder'], model_object=model, model_file=config['model_file'], data_file=open_test_hdf5, patch_shape=config['patch_shape'])
 
-# def train_model(model, model_file, training_generator, validation_generator, steps_per_epoch, validation_steps, initial_learning_rate, learning_rate_drop, learning_rate_epochs, n_epochs):
+def create_directories(delete=False):
 
-#     model.fit_generator(generator=training_generator, steps_per_epoch=steps_per_epoch, epochs=n_epochs, validation_data=validation_generator, validation_steps=validation_steps, pickle_safe=True, callbacks=get_callbacks(model_file, initial_learning_rate=initial_learning_rate, learning_rate_drop=learning_rate_drop,learning_rate_epochs=learning_rate_epochs))
+        # Create required directories
+    for directory in [config['model_file'], config['hdf5_train'], config['hdf5_test'], config['hdf5_validation'], config['predictions_folder']]:
+        directory = os.path.abspath(directory)
+        if not os.path.isdir(directory):
+            directory = os.path.dirname(directory)
+        if delete:
+            rmtree(directory)
+        if not os.path.exists(directory):
+            os.makedirs(directory)
 
-#     model.save(model_file)
+def train_model(model, model_file, training_generator, validation_generator, steps_per_epoch, validation_steps, initial_learning_rate, learning_rate_drop, learning_rate_epochs, n_epochs):
 
-# """ The following three functions/classes are mysterious to me.
-# """
+    model.fit_generator(generator=training_generator, steps_per_epoch=steps_per_epoch, epochs=n_epochs, validation_data=validation_generator, validation_steps=validation_steps, pickle_safe=True, callbacks=get_callbacks(model_file, initial_learning_rate=initial_learning_rate, learning_rate_drop=learning_rate_drop,learning_rate_epochs=learning_rate_epochs))
 
-# def step_decay(epoch, initial_lrate, drop, epochs_drop):
-#     return initial_lrate * math.pow(drop, math.floor((1+epoch)/float(epochs_drop)))
+    model.save(model_file)
 
-# class SaveLossHistory(Callback):
-#     def on_train_begin(self, logs={}):
-#         self.losses = []
+""" The following three functions/classes are mysterious to me.
+"""
 
-#     def on_batch_end(self, batch, logs={}):
-#         self.losses.append(logs.get('loss'))
-#         pickle_dump(self.losses, "loss_history.pkl")
+def step_decay(epoch, initial_lrate, drop, epochs_drop):
+    return initial_lrate * math.pow(drop, math.floor((1+epoch)/float(epochs_drop)))
 
-# def get_callbacks(model_file, initial_learning_rate, learning_rate_drop, learning_rate_epochs, logging_dir="."):
+class SaveLossHistory(Callback):
+    def on_train_begin(self, logs={}):
+        self.losses = []
 
-#     """ Currently do not understand callbacks.
-#     """
+    def on_batch_end(self, batch, logs={}):
+        self.losses.append(logs.get('loss'))
+        pickle_dump(self.losses, "loss_history.pkl")
 
-#     model_checkpoint = ModelCheckpoint(model_file, save_best_only=True)
-#     logger = CSVLogger(os.path.join(logging_dir, "training.log"))
-#     history = SaveLossHistory()
-#     scheduler = LearningRateScheduler(partial(step_decay, initial_lrate=initial_learning_rate, drop=learning_rate_drop, epochs_drop=learning_rate_epochs))
-#     return [model_checkpoint, logger, history, scheduler]
+def get_callbacks(model_file, initial_learning_rate, learning_rate_drop, learning_rate_epochs, logging_dir="."):
+
+    """ Currently do not understand callbacks.
+    """
+
+    model_checkpoint = ModelCheckpoint(model_file, save_best_only=True)
+    logger = CSVLogger(os.path.join(logging_dir, "training.log"))
+    history = SaveLossHistory()
+    scheduler = LearningRateScheduler(partial(step_decay, initial_lrate=initial_learning_rate, drop=learning_rate_drop, epochs_drop=learning_rate_epochs))
+    return [model_checkpoint, logger, history, scheduler]
 
 if __name__ == '__main__':
     run_regression(overwrite=False, only_predict=False)

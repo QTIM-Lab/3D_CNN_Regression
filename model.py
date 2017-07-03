@@ -136,9 +136,6 @@ def compute_level_output_shape(filters, depth, pool_size, image_shape):
 
 def get_upconv(depth, nb_filters, pool_size, image_shape, kernel_size=(2, 2, 2), strides=(2, 2, 2),
                deconvolution=False):
-
-    print compute_level_output_shape(filters=nb_filters, depth=depth+1, pool_size=pool_size, image_shape=image_shape)
-
     if deconvolution and False:
         try:
             from keras_contrib.layers import Deconvolution3D
@@ -158,21 +155,3 @@ def get_upconv(depth, nb_filters, pool_size, image_shape, kernel_size=(2, 2, 2),
 if __name__ == '__main__':
 
     pass
-
-    # config["pool_size"] = (2, 2, 2)
-    # config["image_shape"] = (144, 144, 144)  # This determines what shape the images will be cropped/resampled to.
-    # config["n_labels"] = 1  # not including background
-
-    # model = regression_model_3d((4, 5, 5, 5), downsize_filters_factor=1, pool_size=(2, 2, 2), n_labels=1, initial_learning_rate=0.00001, deconvolution=False)
-
-    # case_num = 60
-    # training_data = dummy_data_generator(cases=case_num, input_modalities=4, modality_dims=(5,5,5))
-
-
-
-
-    # testing_data = dummy_data_generator(cases=test_num, input_modalities=4, modality_dims=(5,5,5))
-
-    # output_model_file = 'test.h5'
-
-    # train_model(model=model, model_file=output_model_file, training_generator=train_generator,validation_generator=validation_generator, steps_per_epoch=nb_train_samples, validation_steps=nb_test_samples, initial_learning_rate=config["initial_learning_rate"], learning_rate_drop=config["learning_rate_drop"], learning_rate_epochs=config["decay_learning_rate_every_x_epochs"], n_epochs=config["n_epochs"])  

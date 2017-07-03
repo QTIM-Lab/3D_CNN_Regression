@@ -20,7 +20,12 @@ class DataCollection(object):
         self.spreadsheet_dict = spreadsheet_dict
         self.value_dict = value_dict
         self.case_list = case_list
-        self.augmentations = augmentations
+
+        # Special behavior for augmentations
+        self.augmentations = []
+        self.cases = []
+
+        # Augmentations
 
         # Empty vars
         self.data_groups = {}
@@ -32,7 +37,17 @@ class DataCollection(object):
     def verify_data_shape(self):
         return
 
-    def append_augmentation(self, augmentation):
+    def append_augmentation(self, augmentation_group, data_groups=None):
+
+        for data_group_label in augmentation_group.augmentation_dict.keys():
+            self.data_groups[data_group_label].append_augmentation(augmentation_group.augmentation_dict[data_group_label])
+
+            augmentation_group.augmentation_dict[data_group_label].append_data_group(self.data_groups[data_group_label])
+            augmentation_group.augmentation_dict[data_group_label].initialize_augmentation()
+
+        # Don't like this list method, find a more explicity way.
+        self.augmentations.append(augmentation_group)
+
         return
 
     def fill_data_groups(self):
@@ -49,10 +64,14 @@ class DataCollection(object):
         for modality_group in self.modality_dict:
 
             # print modality_group
+            if modality_group not in self.data_groups.keys():
+                self.data_groups[modality_group] = DataGroup(modality_group)
 
-            self.data_groups[modality_group] = DataGroup(modality_group)
+        for subject_dir in sorted(glob.glob(os.path.join(self.data_directory, "*/"))):
 
-            for subject_dir in sorted(glob.glob(os.path.join(self.data_directory, "*/"))):
+            self.cases.append(os.path.abspath(subject_dir))
+
+            for modality_group in self.modality_dict:
 
                 if self.case_list is not None:
                     if os.path.basename(subject_dir) not in self.case_list:
@@ -68,29 +87,77 @@ class DataCollection(object):
                         break
 
                 if len(modality_group_files) == len(self.modality_dict[modality_group]):
-                    print tuple(modality_group_files)
                     self.data_groups[modality_group].add_case(tuple(modality_group_files), os.path.abspath(subject_dir))
 
     def write_data_to_file(self, output_filepath=None, data_groups=None):
+
+        """ Interesting question: Should all passed data_groups be assumed to have equal size? Nothing about hdf5 requires that, but it makes things a lot easier to assume.
+        """
 
         if data_groups is None:
             data_groups = self.data_groups.keys()
 
         if output_filepath is None:
-            output_filepath = os.path.join(self.data_directory, '_'.join(modalities) + '.hdf5')
+            output_filepath = os.path.join(self.data_directory, 'data.hdf5')
 
         # Create Data File
-        try:
-            hdf5_file = create_hdf5_file(output_filepath, data_groups, self)
-        except Exception as e:
-            os.remove(output_filepath)
-            raise e
+        # try:
+        hdf5_file = create_hdf5_file(output_filepath, data_groups, self)
+        # except Exception as e:
+            # os.remove(output_filepath)
+            # raise e
 
         # Write data
-        write_image_data_to_hdf5(data_groups, data_storages, self)
+        write_image_data_to_hdf5(self, data_groups)
 
         hdf5_file.close()
-        return output_hdf5_filepath
+
+    def recursive_augmentation(self, data_groups, augmentation_num=0):
+
+        """ This function baldly reveals my newness at recursion..
+        """
+
+        print 'BEGIN RECURSION FOR AUGMENTATION NUM', augmentation_num
+
+        if augmentation_num == len(self.augmentations):
+            for data_group in data_groups:
+                data_group.write_to_storage()
+            return
+
+        else:
+
+            for iteration in xrange(self.augmentations[augmentation_num].total_iterations):
+
+                print 'AUGMENTATION NUM', augmentation_num, 'ITERATION', iteration
+
+                for data_group in data_groups:
+
+                    if augmentation_num == 0:
+                        data_group.augmentation_cases[augmentation_num] = self.augmentations[augmentation_num].augmentation_dict[data_group.label].augment(data_group.base_case)
+                    else:
+                        data_group.augmentation_cases[augmentation_num] = self.augmentations[augmentation_num].augmentation_dict[data_group.label].augment(data_group.augmentation_cases[augmentation_num-1])
+
+                    data_group.current_case = data_group.augmentation_cases[augmentation_num]
+                    data_group.augmentation_num += 1
+
+                self.recursive_augmentation(data_groups, augmentation_num+1)
+
+                print 'FINISH RECURSION FOR AUGMENTATION NUM', augmentation_num+1
+
+                for data_group in data_groups:
+                    if augmentation_num == 0:
+                        data_group.current_case = data_group.base_case
+                    else:
+                        data_group.current_case = data_group.augmentation_cases[augmentation_num - 1]
+
+                for data_group in data_groups:        
+                    self.augmentations[augmentation_num].augmentation_dict[data_group.label].iterate()
+
+        for data_group in data_groups:
+            data_group.augmentation_num -= 1
+
+        return
+
 
 class DataGroup(object):
 
@@ -99,24 +166,31 @@ class DataGroup(object):
         self.label = label
         self.augmentations = []
         self.data = []
-        self.case_names = []
+        self.cases = []
 
-        self.storage = None
+        self.base_case = None
+        self.augmentation_cases = []
+        self.current_case = None
+
+        self.augmentation_num = -1
+
+        self.data_storage = None
 
         self.num_cases = 0
 
     def add_case(self, item, case_name):
         self.data.append(item)
-        self.case_names.append(case_name)
+        self.cases.append(case_name)
         self.num_cases = len(self.data)
 
-    def add_augmentations(self, augmentation):
-        self.augmentations.append(Augmentation)
+    def append_augmentation(self, augmentation):
+        self.augmentations.append(augmentation)
+        self.augmentation_cases.append([])
 
     def get_augment_num_shape(self):
 
         output_num = len(self.data)
-        output_shape = get_shape(self)
+        output_shape = self.get_shape()
 
         # Get output size for list of augmentations.
         for augmentation in self.augmentations:
@@ -147,7 +221,7 @@ class DataGroup(object):
         if self.data == []:
             return (0,)
         else:
-            return nifti_2_numpy(self.data[0]).shape
+            return nifti_2_numpy(self.data[0][0]).shape
 
     def get_modalities(self):
         if self.data == []:
@@ -165,6 +239,9 @@ class DataGroup(object):
 
         return output_data
 
+    def write_to_storage(self):
+        self.data_storage.append(self.current_case)
+
 def create_hdf5_file(output_filepath, data_groups, data_collection):
 
     # Investigate hdf5 files.
@@ -180,32 +257,55 @@ def create_hdf5_file(output_filepath, data_groups, data_collection):
     for data_group_label in data_groups:
 
         data_group = data_collection.data_groups[data_group_label]
-        num_cases, input_shape = data_group.get_augment_num_shape()
+
+        num_cases, output_shape = data_group.get_augment_num_shape()
         modalities = data_group.get_modalities()
 
         # Input data has multiple 'channels' i.e. modalities.
-        data_shape = tuple([0, modalities] + list(input_shape))
-        data_storages += [hdf5_file.create_earray(hdf5_file.root, data_group.label, tables.Float32Atom(), shape=data_shape, filters=filters, expectedrows=num_cases)]
-        data_group.storage = data_storages[-1]
+        data_shape = tuple([0, modalities] + list(output_shape))
+        print data_group.label, data_shape
+        data_group.data_storage = hdf5_file.create_earray(hdf5_file.root, data_group.label, tables.Float32Atom(), shape=data_shape, filters=filters, expectedrows=num_cases)
 
-    return hdf5_file, data_storages
+    return hdf5_file
 
-def write_image_data_to_hdf5(data_groups, data_collection):
+def write_image_data_to_hdf5(data_collection, data_groups):
 
-    for data_group_label in data_groups:
+    """ Temporary solution until a better way to represent cases is found.
 
-        data_group = data_collection.data_groups[data_group_label]
+        There's a lot of funny conversions between strings and objects in these functions.
+    """
 
-        for image_idx in xrange(len(data_group.data)):
+    # Will cases always be ordered..?
+    for case_idx, case_name in enumerate(data_collection.cases):
 
-            subject_data = read_image_files(data_group.data)[:][np.newaxis]
+        print 'Working on image.. ', case_idx, 'in', case_name
 
-            # This list-y-ness of this part is questionable, i.e. when its defined as a list.
-            subject_data = data_group.augment(subject_data)
+        all_cases = {}
+        data_group_objects = [data_collection.data_groups[label] for label in data_groups]
 
-            # I don't intuitively understand what's going on with new axis here, but the dimensions seem to work out.
-            for subject_data_i in subject_data:
-                data_group.data_storage.append(subject_data_i)
+        missing_case = False
+        for data_group in data_group_objects:
+
+            try:
+                case_index = data_group.cases.index(case_name)
+            except:
+                missing_case = True
+                missing_data_group = data_group.label
+                break
+            data_group.base_case = read_image_files(data_group.data[case_index])[:][np.newaxis]
+            data_group.current_case = data_group.base_case
+
+        # A little screwy.
+        if missing_case:
+            print 'Missing case', case_name, 'in data group', missing_data_group, '. Skipping this case..'
+            continue
+
+        print '\n'
+
+        if data_collection.augmentations != []:
+            data_collection.recursive_augmentation(data_group_objects)
+        else:
+            pass
 
 def read_image_files(image_files):
 

@@ -13,10 +13,6 @@ config["hdf5_train"] = './hdf5_data/brats_train.hdf5'
 config["hdf5_test"] = './hdf5_data/brats_test.hdf5'
 config["hdf5_validation"] = './hdf5_data/brats_validation.hdf5'
 
-# If you want to preserve automated training/validation splits..
-config["training_file"] = os.path.abspath("./hdf5_data/training_ids.pkl")
-config["validation_file"] = os.path.abspath("./hdf5_data/validation_ids.pkl")
-
 # Overwrite settings.
 config["overwrite_trainval_data"] = True
 config["overwrite_train_val_split"] = True
@@ -27,11 +23,11 @@ config["overwrite_training"] = True
 # Image Information
 config["image_shape"] = (240, 240, 155)
 
-# Patch Information
-config['patches'] = True
+# # Patch Information
+# config['patches'] = True
 config['patch_shape'] = (16, 16, 16)
-config['train_patch_num'] = 6000
-config['validation_patch_num'] = 3000
+# config['train_patch_num'] = 6000
+# config['validation_patch_num'] = 3000
 
 # Modalities. Always make input_groundtruth as list.
 config["input_modalities"] = ['FLAIR_pp', 'T2_pp', 'T1c_pp', 'T1_pp']
@@ -52,18 +48,18 @@ config["n_epochs"] = 600
 
 # Model training parameters
 config["train_test_split"] = .8
-config["batch_size"] = 50
+config["batch_size"] = 5
 
 # Model testing parameters
 config['predictions_folder'] = os.path.abspath('./predictions')
 
 # Threshold Functions
 def background_patch(patch):
-    return float((patch[0,...] == 0).sum()) / patch[0,...].size == 1
+    return float((patch['input_modalities'] == 0).sum()) / patch['input_modalities'].size == 1
 def brain_patch(patch):
-    return float((patch[0,...] > 0).sum()) / patch[0,...].size > .5 and float((patch[-1,...] == 1).sum()) / patch[0,...].size < .5
+    return float((patch['input_modalities'] > 0).sum()) / patch['input_modalities'].size > .5 and float((patch['ground_truth'] == 1).sum()) / patch['input_modalities'].size < .5
 def roi_patch(patch):
-    return float((patch[-1,...] == 1).sum()) / patch[-1,...].size > .5
+    return float((patch['ground_truth'] == 1).sum()) / patch['ground_truth'].size > .5
 
 config["patch_extraction_conditions"] = [[background_patch, .001], [brain_patch, .199], [roi_patch, .8]]
 
