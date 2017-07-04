@@ -302,10 +302,7 @@ def write_image_data_to_hdf5(data_collection, data_groups):
 
         print '\n'
 
-        if data_collection.augmentations != []:
-            data_collection.recursive_augmentation(data_group_objects)
-        else:
-            pass
+        data_collection.recursive_augmentation(data_group_objects)
 
 def read_image_files(image_files):
 

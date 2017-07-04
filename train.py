@@ -3,33 +3,32 @@ import os
 import math
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"   # see issue #152
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 from functools import partial
 from shutil import rmtree
 
 from keras.callbacks import ModelCheckpoint, CSVLogger, Callback, LearningRateScheduler
 
-from config_files.brats_config import config
+from config_files.brats_tumor_config import config
 
 from model import regression_model_3d, load_old_model
 from load_data import DataCollection
 from data_generator import get_data_generator
 from data_utils import pickle_dump, pickle_load
-# from predict import run_validation_case, run_validation_case_patches
+from predict import run_validation_case, run_validation_case_patches
 from augment import *
 
 def run_regression(overwrite=False, delete=False, config_dict={}, only_predict=False):
 
     create_directories(delete=delete)
 
+    modality_dict = config['modality_dict']
+
     validation_files = []
 
     # Load training and validation data.
     if config['overwrite_trainval_data'] or not os.path.exists(os.path.abspath(config["hdf5_train"])):
-
-        modality_dict = {'input_modalities': ['*FLAIR_pp*', '*T2_pp*', '*T1c_pp*', '*T1_pp*'],
-                        'ground_truth': ['*ROI_pp_edema_nonenhancing_tumor_necrosis*']}
 
         # Find Data
         validation_data_collection = DataCollection(config['validation_dir'], modality_dict)
@@ -40,23 +39,15 @@ def run_regression(overwrite=False, delete=False, config_dict={}, only_predict=F
 
         # Training
         patch_extraction_augmentation = ExtractPatches(config['patch_shape'], config['patch_extraction_conditions'])
-        patch_augmentation = AugmentationGroup({'input_modalities': patch_extraction_augmentation, 'ground_truth': patch_extraction_augmentation}, multiplier=10)
+        patch_augmentation = AugmentationGroup({'input_modalities': patch_extraction_augmentation, 'ground_truth': patch_extraction_augmentation}, multiplier=20)
         training_data_collection.append_augmentation(patch_augmentation)
-
-        # small_patch_extraction_augmentation = ExtractPatches((2,2,2), None)
-        # small_patch_augmentation = AugmentationGroup({'input_modalities': small_patch_extraction_augmentation, 'ground_truth': small_patch_extraction_augmentation}, multiplier=10)
-        # training_data_collection.append_augmentation(small_patch_augmentation)
 
         training_data_collection.write_data_to_file(output_filepath = config['hdf5_train'])
 
         # Validation
         patch_extraction_augmentation = ExtractPatches(config['patch_shape'], config['patch_extraction_conditions'])
-        patch_augmentation = AugmentationGroup({'input_modalities': patch_extraction_augmentation, 'ground_truth': patch_extraction_augmentation}, multiplier=10)
+        patch_augmentation = AugmentationGroup({'input_modalities': patch_extraction_augmentation, 'ground_truth': patch_extraction_augmentation}, multiplier=5)
         validation_data_collection.append_augmentation(patch_augmentation)
-
-        # small_patch_extraction_augmentation = ExtractPatches((2,2,2), None)
-        # small_patch_augmentation = AugmentationGroup({'input_modalities': small_patch_extraction_augmentation, 'ground_truth': small_patch_extraction_augmentation}, multiplier=10)
-        # validation_data_collection.append_augmentation(small_patch_augmentation)
 
         validation_data_collection.write_data_to_file(output_filepath = config['hdf5_validation'])
 
@@ -64,7 +55,7 @@ def run_regression(overwrite=False, delete=False, config_dict={}, only_predict=F
     if not config["overwrite_model"] and os.path.exists(config["model_file"]):
         model = load_old_model(config["model_file"])
     else:
-        model = regression_model_3d((len(config['input_modalities']),) + config['patch_shape'], downsize_filters_factor=config['downsize_filters_factor'], initial_learning_rate=config['initial_learning_rate'], regression=config['regression'])
+        model = regression_model_3d((len(modality_dict['input_modalities']),) + config['patch_shape'], downsize_filters_factor=config['downsize_filters_factor'], initial_learning_rate=config['initial_learning_rate'], regression=config['regression'])
 
     # Create data generators and train the model.
     if config["overwrite_training"]:
@@ -91,8 +82,12 @@ def run_regression(overwrite=False, delete=False, config_dict={}, only_predict=F
 
     # Load testing data
     if config['overwrite_test_data'] or not os.path.exists(os.path.abspath(config["hdf5_test"])):
-        testing_data_files, testing_groundtruth_files = fetch_data_files(config['test_dir'], config['input_modalities'], config['input_groundtruth'])
-        write_data_to_file(testing_data_files, testing_groundtruth_files, config["hdf5_test"], config['image_shape'])  
+        
+
+        testing_data_collection = DataCollection(config['test_dir'], modality_dict)
+        testing_data_collection.fill_data_groups()
+        testing_data_collection.write_data_to_file(output_filepath = config['hdf5_test'])
+
 
     # Run prediction step.
     if config['overwrite_prediction']:

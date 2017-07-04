@@ -203,6 +203,8 @@ class ExtractPatches(Augmentation):
             else:
                 acceptable_patch = True
 
+        print self.patch_extraction_conditions[self.condition_list[self.iteration]][0]
+
         self.patch_corner = corner
 
         return

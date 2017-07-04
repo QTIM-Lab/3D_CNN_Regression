@@ -14,11 +14,11 @@ config["hdf5_test"] = './hdf5_data/brats_test.hdf5'
 config["hdf5_validation"] = './hdf5_data/brats_validation.hdf5'
 
 # Overwrite settings.
-config["overwrite_trainval_data"] = True
-config["overwrite_train_val_split"] = True
-config['overwrite_test_data'] = True
-config["overwrite_model"] = True
-config["overwrite_training"] = True
+config["overwrite_trainval_data"] = False
+config['overwrite_test_data'] = False
+config["overwrite_model"] = False
+config["overwrite_training"] = False
+config["overwrite_prediction"] = True
 
 # Image Information
 config["image_shape"] = (240, 240, 155)
@@ -30,8 +30,8 @@ config['patch_shape'] = (16, 16, 16)
 # config['validation_patch_num'] = 3000
 
 # Modalities. Always make input_groundtruth as list.
-config["input_modalities"] = ['FLAIR_pp', 'T2_pp', 'T1c_pp', 'T1_pp']
-config["input_groundtruth"] = ['ROI_pp_edema_nonenhancing_tumor_necrosis']
+config["modality_dict"] = {'input_modalities': ['*FLAIR_pp*', '*T2_pp*', '*T1c_pp*', '*T1_pp*'],
+                        'ground_truth': ['*ROI_pp_edema_nonenhancing_tumor_necrosis*']}
 # config["input_modalities"] = ['FLAIR_p', 'T2_p', 'T1C_p', 'T1_p']
 # config["input_groundtruth"] = ['GT_p']
 config["regression"] = True
@@ -42,13 +42,13 @@ config["model_file"] = "./model_files/brats_model_regress.h5"
 # Model parameters
 config["downsize_filters_factor"] = 1
 config["decay_learning_rate_every_x_epochs"] = 20
-config["initial_learning_rate"] = 0.0001
+config["initial_learning_rate"] = 0.00005
 config["learning_rate_drop"] = 0.9
 config["n_epochs"] = 600
 
 # Model training parameters
 config["train_test_split"] = .8
-config["batch_size"] = 5
+config["batch_size"] = 100
 
 # Model testing parameters
 config['predictions_folder'] = os.path.abspath('./predictions')

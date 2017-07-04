@@ -2,6 +2,9 @@
 /dummy_data/*
 /model_files/*
 /hdf5_data/*
+/predictions/*
+/config_files/*
+*.pkl
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

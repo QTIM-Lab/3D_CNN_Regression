@@ -73,10 +73,10 @@ def run_validation_case_patches(output_dir, model_object, model_file, data_file,
     # model = load_old_model(model_file)
     model = model_object
 
-    for case_num in xrange(data_file.root.data.shape[0]):
+    for case_num in xrange(data_file.root.input_modalities.shape[0]):
 
-        test_data = np.asarray([data_file.root.data[case_num]])
-        test_truth = np.asarray([data_file.root.truth[case_num]])
+        test_data = np.asarray([data_file.root.input_modalities[case_num]])
+        test_truth = np.asarray([data_file.root.ground_truth[case_num]])
 
         save_numpy_2_nifti(np.squeeze(test_truth), output_filepath=os.path.join(output_dir, 'TESTCASE_' + str(case_num).zfill(3) + '_TRUTH.nii.gz'))
         for modality_num in xrange(test_data.shape[1]):
