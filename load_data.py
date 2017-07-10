@@ -108,9 +108,45 @@ class DataCollection(object):
             # raise e
 
         # Write data
-        write_image_data_to_hdf5(self, data_groups)
+        self.write_image_data_to_hdf5(data_groups)
 
         hdf5_file.close()
+
+    def write_image_data_to_hdf5(self, data_groups):
+
+        """ Some of the syntax around data groups can be cleaned up in this function.
+        """
+
+        data_group_objects = [self.data_groups[label] for label in data_groups]
+
+        # Will cases always be ordered..?
+        for case_idx, case_name in enumerate(self.cases):
+
+            print 'Working on image.. ', case_idx, 'in', case_name
+
+            all_cases = {}
+
+            # Check for missing data.
+            missing_case = False
+            for data_group in data_group_objects:
+
+                try:
+                    case_index = data_group.cases.index(case_name)
+                except:
+                    missing_case = True
+                    missing_data_group = data_group.label
+                    break
+                data_group.base_case = read_image_files(data_group.data[case_index])[:][np.newaxis]
+                data_group.current_case = data_group.base_case
+
+            if missing_case:
+                print 'Missing case', case_name, 'in data group', missing_data_group, '. Skipping this case..'
+                continue
+
+            print '\n'
+
+            self.recursive_augmentation(data_group_objects)
+
 
     def recursive_augmentation(self, data_groups, augmentation_num=0):
 
@@ -157,7 +193,6 @@ class DataCollection(object):
             data_group.augmentation_num -= 1
 
         return
-
 
 class DataGroup(object):
 
@@ -267,42 +302,6 @@ def create_hdf5_file(output_filepath, data_groups, data_collection):
         data_group.data_storage = hdf5_file.create_earray(hdf5_file.root, data_group.label, tables.Float32Atom(), shape=data_shape, filters=filters, expectedrows=num_cases)
 
     return hdf5_file
-
-def write_image_data_to_hdf5(data_collection, data_groups):
-
-    """ Temporary solution until a better way to represent cases is found.
-
-        There's a lot of funny conversions between strings and objects in these functions.
-    """
-
-    # Will cases always be ordered..?
-    for case_idx, case_name in enumerate(data_collection.cases):
-
-        print 'Working on image.. ', case_idx, 'in', case_name
-
-        all_cases = {}
-        data_group_objects = [data_collection.data_groups[label] for label in data_groups]
-
-        missing_case = False
-        for data_group in data_group_objects:
-
-            try:
-                case_index = data_group.cases.index(case_name)
-            except:
-                missing_case = True
-                missing_data_group = data_group.label
-                break
-            data_group.base_case = read_image_files(data_group.data[case_index])[:][np.newaxis]
-            data_group.current_case = data_group.base_case
-
-        # A little screwy.
-        if missing_case:
-            print 'Missing case', case_name, 'in data group', missing_data_group, '. Skipping this case..'
-            continue
-
-        print '\n'
-
-        data_collection.recursive_augmentation(data_group_objects)
 
 def read_image_files(image_files):
 

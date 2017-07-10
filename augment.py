@@ -172,6 +172,8 @@ class ExtractPatches(Augmentation):
             Also, patching across the modality dimension..? Interesting..
         """
 
+        # TODO: Escape clause in case acceptable patches cannot be found.
+
         acceptable_patch = False
 
         data_group_labels = self.data_groups.keys()

@@ -263,3 +263,41 @@ def convert_data(x_list, y_list):
     x = np.asarray(x_list)
     y = np.asarray(y_list)
     return x, y
+
+def get_test_indices(testing_file):
+    return pickle_load(testing_file)
+
+def predict_from_data_file(model, open_data_file, index):
+    return model.predict(open_data_file.root.data[index])
+
+def predict_and_get_image(model, data, affine):
+    return nib.Nifti1Image(model.predict(data)[0, 0], affine)
+
+def predict_from_data_file_and_get_image(model, open_data_file, index):
+    return predict_and_get_image(model, open_data_file.root.data[index], open_data_file.root.affine)
+
+def predict_from_data_file_and_write_image(model, open_data_file, index, out_file):
+    image = predict_from_data_file_and_get_image(model, open_data_file, index)
+    image.to_filename(out_file)
+
+
+def prediction_to_image(prediction, affine, label_map=False, threshold=0.5, labels=None):
+    if prediction.shape[1] == 1:
+        data = prediction[0, 0]
+        if label_map:
+            label_map_data = np.zeros(prediction[0, 0].shape, np.int8)
+            if labels:
+                label = labels[0]
+            else:
+                label = 1
+            label_map_data[data > threshold] = label
+            data = label_map_data
+    elif prediction.shape[1] > 1:
+        if label_map:
+            label_map_data = get_prediction_labels(prediction, threshold=threshold, labels=labels)
+            data = label_map_data[0]
+        else:
+            return multi_class_prediction(prediction, affine)
+    else:
+        raise RuntimeError("Invalid prediction array shape: {0}".format(prediction.shape))
+    return nib.Nifti1Image(data, affine)

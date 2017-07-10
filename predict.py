@@ -11,93 +11,64 @@ import tables
 from model import load_old_model
 from image_utils import save_numpy_2_nifti
 
-def get_test_indices(testing_file):
-    return pickle_load(testing_file)
+def model_predict_patches(data_file, input_data, patch_shape, repetitions=16, test_batch_size=100, output_data=None, output_shape=None, model=None, model_file=None, output_directory=None):
 
-def predict_from_data_file(model, open_data_file, index):
-    return model.predict(open_data_file.root.data[index])
+    """ TODO: Make work for multiple inputs and outputs.
+        TODO: Interact with data group interface
+        TODO: Pass output filenames to hdf5 files.
+    """
 
-def predict_and_get_image(model, data, affine):
-    return nib.Nifti1Image(model.predict(data)[0, 0], affine)
+    print 'OUTPUT_SHAPE', output_shape, '\n'
 
-def predict_from_data_file_and_get_image(model, open_data_file, index):
-    return predict_and_get_image(model, open_data_file.root.data[index], open_data_file.root.affine)
+    # Create output directory. If not provided, output into original patient folder.
+    if output_directory is not None:
+        if not os.path.exists(output_directory):
+            os.makedirs(output_directory)
 
-def predict_from_data_file_and_write_image(model, open_data_file, index, out_file):
-    image = predict_from_data_file_and_get_image(model, open_data_file, index)
-    image.to_filename(out_file)
+    # Load model.
+    if model is None and model_file is None:
+        print 'Error. Please provide either a model object or a model filepath.'
+    elif model is None:
+        model = load_old_model(model_file)
 
-def prediction_to_image(prediction, affine, label_map=False, threshold=0.5, labels=None):
-    if prediction.shape[1] == 1:
-        data = prediction[0, 0]
-        if label_map:
-            label_map_data = np.zeros(prediction[0, 0].shape, np.int8)
-            if labels:
-                label = labels[0]
-            else:
-                label = 1
-            label_map_data[data > threshold] = label
-            data = label_map_data
-    elif prediction.shape[1] > 1:
-        if label_map:
-            label_map_data = get_prediction_labels(prediction, threshold=threshold, labels=labels)
-            data = label_map_data[0]
+    # TODO: Add check in case an object is passed in.
+    # input_data_object = self.data_groups[input_data_group]
+
+    getattr(data_file.root, input_data).shape[0]
+
+    # Iterate through cases and predict.
+    for case_idx, case_name in enumerate(xrange(getattr(data_file.root, input_data).shape[0])):
+
+        print 'Working on image.. ', case_idx, 'in', case_name
+
+        test_input = np.asarray([getattr(data_file.root, input_data)[case_idx]])
+
+        if output_data is not None:
+            test_output = np.asarray([getattr(data_file.root, output_data)[case_idx]])
+            save_numpy_2_nifti(np.squeeze(test_output), output_filepath=os.path.join(output_directory, 'TESTCASE_' + str(case_idx).zfill(3) + '_TRUTH.nii.gz'))
+
+        for modality_num in xrange(test_input.shape[1]):
+            save_numpy_2_nifti(np.squeeze(test_input[:,modality_num,...]), output_filepath=os.path.join(output_directory, 'TESTCASE_' + str(case_idx).zfill(3) + '_MODALITY_' + str(modality_num) + '.nii.gz'))
+
+        if output_data is None and output_shape is None:
+            print 'Currently, you must provide either a reference ground truth data or a reference output shape to perform a prediction.'
+        elif output_data is None:
+            final_image = np.zeros(output_shape)
         else:
-            return multi_class_prediction(prediction, affine)
-    else:
-        raise RuntimeError("Invalid prediction array shape: {0}".format(prediction.shape))
-    return nib.Nifti1Image(data, affine)
-
-def run_validation_case(output_dir, model_file, data_file):
-
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-
-    model = load_old_model(model_file)
-
-    for case_num in xrange(data_file.root.data.shape[0]):
-        test_data = np.asarray([data_file.root.data[case_num]])
-        test_truth = np.asarray([data_file.root.truth[case_num]])
-
-        save_numpy_2_nifti(np.squeeze(test_truth), output_filepath=os.path.join(output_dir, 'TESTCASE_' + str(case_num).zfill(3) + '_TRUTH.nii.gz'))
-        prediction = model.predict(test_data)
-        save_numpy_2_nifti(np.squeeze(prediction), output_filepath=os.path.join(output_dir, 'TESTCASE_' + str(case_num).zfill(3) + '_PREDICT.nii.gz'))
-
-    data_file.close()
-
-def run_validation_case_patches(output_dir, model_object, model_file, data_file, patch_shape, repetitions=16, test_batch=75):
-
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-
-    # model = load_old_model(model_file)
-    model = model_object
-
-    for case_num in xrange(data_file.root.input_modalities.shape[0]):
-
-        test_data = np.asarray([data_file.root.input_modalities[case_num]])
-        test_truth = np.asarray([data_file.root.ground_truth[case_num]])
-
-        save_numpy_2_nifti(np.squeeze(test_truth), output_filepath=os.path.join(output_dir, 'TESTCASE_' + str(case_num).zfill(3) + '_TRUTH.nii.gz'))
-        for modality_num in xrange(test_data.shape[1]):
-            save_numpy_2_nifti(np.squeeze(test_data[:,modality_num,...]), output_filepath=os.path.join(output_dir, 'TESTCASE_' + str(case_num).zfill(3) + '_MODALITY_' + str(modality_num) + '.nii.gz'))
-
-        final_image = np.zeros_like(test_truth)
-
-        print 'TESTCASE_' + str(case_num).zfill(3) + '_MODALITY_' + str(modality_num) + '.nii.gz'
+            final_image = np.zeros_like(test_output)
 
         for rep_idx in xrange(repetitions):
 
-            print 'REPETITION..', rep_idx
+            print 'PATCH GRID REPETITION # ..', rep_idx
 
-            offset_slice = [slice(None)]*2 + [slice(rep_idx, None, 1)] * (test_data.ndim - 2)
-            repatched_image = np.zeros_like(test_truth[offset_slice])
-            corners_list = patchify_image(test_data[offset_slice], [test_data[offset_slice].shape[1]] + list(patch_shape))
+            offset_slice = [slice(None)]*2 + [slice(rep_idx, None, 1)] * (test_input.ndim - 2)
+            repatched_image = np.zeros_like(final_image[offset_slice])
+            corners_list = patchify_image(test_input[offset_slice], [test_input[offset_slice].shape[1]] + list(patch_shape))
 
-            for corner_list_idx in xrange(0, len(corners_list), test_batch):
+            for corner_list_idx in xrange(0, len(corners_list), test_batch_size):
 
-                corner_batch = corners_list[corner_list_idx:corner_list_idx+test_batch]
-                input_patches = grab_patch(test_data[offset_slice], corners_list[corner_list_idx:corner_list_idx+test_batch], patch_shape)
+                corner_batch = corners_list[corner_list_idx:corner_list_idx+test_batch_size]
+                input_patches = grab_patch(test_input[offset_slice], corners_list[corner_list_idx:corner_list_idx+test_batch_size], patch_shape)
                 prediction = model.predict(input_patches)
 
                 for corner_idx, corner in enumerate(corner_batch):
@@ -108,14 +79,35 @@ def run_validation_case_patches(output_dir, model_object, model_file, data_file,
             else:
                 final_image[offset_slice] = final_image[offset_slice] + (1.0 / (rep_idx)) * (repatched_image - final_image[offset_slice])
         
-        print np.sum(final_image)
-
         final_image = np.around(np.squeeze(final_image))
-        # final_image[final_image < 3] == 0
 
-        save_numpy_2_nifti(final_image, output_filepath=os.path.join(output_dir, 'TESTCASE_' + str(case_num).zfill(3) + '_PREDICT.nii.gz'))
+        print 'Sum of output...', np.sum(final_image[0,...]), np.sum(final_image[1,...]), np.sum(final_image[2,...])
+
+        # Multi-label images. TODO: Standardize this.
+        composite_final_image = final_image[0,...]
+        composite_final_image[final_image[1,...] > 0] = 2
+        composite_final_image[final_image[2,...] > 0] = 3
+
+        save_numpy_2_nifti(composite_final_image, output_filepath=os.path.join(output_directory, 'TESTCASE_' + str(case_idx).zfill(3) + '_PREDICT.nii.gz'))
 
     data_file.close() 
+
+def run_validation_case(output_dir, model_file, data_file):
+
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    model = load_old_model(model_file)
+
+    for case_idx in xrange(data_file.root.data.shape[0]):
+        test_input = np.asarray([data_file.root.data[case_idx]])
+        test_truth = np.asarray([data_file.root.truth[case_idx]])
+
+        save_numpy_2_nifti(np.squeeze(test_truth), output_filepath=os.path.join(output_dir, 'TESTCASE_' + str(case_idx).zfill(3) + '_TRUTH.nii.gz'))
+        prediction = model.predict(test_input)
+        save_numpy_2_nifti(np.squeeze(prediction), output_filepath=os.path.join(output_dir, 'TESTCASE_' + str(case_idx).zfill(3) + '_PREDICT.nii.gz'))
+
+    data_file.close()
 
 def patchify_image(input_data, patch_shape, offset=(0,0,0,0), batch_dim=True, return_patches=False):
 
@@ -183,7 +175,9 @@ def grab_patch(input_data, corner_list, patch_shape):
 def insert_patch(input_data, patch, corner):
 
     patch_shape = patch.shape[1:]
+
     patch_slice = [slice(None)]*2 + [slice(corner_dim, corner_dim+patch_shape[idx], 1) for idx, corner_dim in enumerate(corner[1:])]
+    
     input_data[patch_slice] = patch
 
     return

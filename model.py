@@ -13,24 +13,65 @@ try:
 except ImportError:
     from keras.layers.merge import concatenate
 
-def regression_model_3d(input_shape, downsize_filters_factor=1, pool_size=(2, 2, 2), initial_learning_rate=0.00001, convolutions=4, dropout=.25, filter_shape=(3,3,3), num_outputs=1, deconvolution=True, regression=True):
+def n_net_3d(input_shape, output_shape, initial_convolutions_num=3, downsize_filters_factor=1, pool_size=(2, 2, 2), initial_learning_rate=0.00001, dropout=.25, filter_shape=(3,3,3), num_outputs=1, deconvolution=True, regression=True):
+
+    # Convenience variables.
+    # For now, we assume that the modalties are ordered by nesting priority.
+    output_modalities = output_shape[0]
+
+    # Original input
+    inputs = Input(input_shape)
+
+    # Change the space of the input data into something a bit more generalized using consecutive convolutions.
+    initial_conv = Conv3D(int(8/downsize_filters_factor), filter_shape, activation='relu', padding='same', data_format='channels_first')(inputs)
+    initial_conv = Dropout(dropout)(initial_conv)
+    if initial_convolutions_num > 1:
+        for conv_num in xrange(initial_convolutions_num-1):
+
+            initial_conv = Conv3D(int(8/downsize_filters_factor), filter_shape, activation='relu', padding='same', data_format='channels_first')(initial_conv)
+            initial_conv = Dropout(dropout)(initial_conv)
+
+    # Cascading U-Nets
+    input_list = [initial_conv] * output_modalities
+    output_list = [None] * output_modalities
+    for modality in xrange(output_modalities):
+
+        for output in output_list:
+            if output is not None:
+                input_list[modality] = concatenate([input_list[modality], output], axis=1)
+
+        print '\n'
+        print 'MODALITY', modality, 'INPUT LIST', input_list[modality]
+        print '\n'
+
+        output_list[modality] = u_net_3d(input_shape=input_shape, input_tensor=input_list[modality], downsize_filters_factor=downsize_filters_factor*4, pool_size=(2, 2, 2), initial_learning_rate=initial_learning_rate, dropout=dropout, filter_shape=(3,3,3), num_outputs=1, deconvolution=True, regression=True)
+
+    # Concatenate results
+    print output_list
+    final_output = output_list[0]
+    if len(output_list) > 1:
+        for output in output_list[1:]:
+            final_output = concatenate([final_output, output], axis=1)
+
+    # Get cost
+    if regression:
+        act = Activation('relu')(final_output)
+        model = Model(inputs=inputs, outputs=act)
+        model.compile(optimizer=Adam(lr=initial_learning_rate), loss=msq_loss, metrics=[msq])
+    else:
+        act = Activation('sigmoid')(final_output)
+        model = Model(inputs=inputs, outputs=act)
+        model.compile(optimizer=Adam(lr=initial_learning_rate), loss=dice_coef_loss, metrics=[dice_coef])
+
+    return model
+
+def w_net_3d(input_shape, output_shape, initial_convolutions_num=3, downsize_filters_factor=1, pool_size=(2, 2, 2), initial_learning_rate=0.00001, dropout=.25, filter_shape=(3,3,3), num_outputs=1, deconvolution=True, regression=True):
+
+    # Convenience variables.
+    # For now, we assume that the modalties are ordered by nesting priority.
+    output_modalities = output_shape[0]
 
     inputs = Input(input_shape)
-    # inputs = Input((1,32,32,32,4))
-    # conv_mid = Conv3D(int(32/downsize_filters_factor), filter_shape, activation='relu', padding='same', data_format='channels_first')(inputs)
-
-    # conv_mid = Dropout(0.25)(conv_mid)
-
-    # for conv_num in xrange(convolutions-2):
-
-    #     conv_mid = Conv3D(int(32/downsize_filters_factor), filter_shape, activation='relu', padding='same', data_format='channels_first')(conv_mid)
-    #     conv_mid = Dropout(0.25)(conv_mid)
-
-    # conv_out = Conv3D(int(1), filter_shape, activation='tanh', padding='same', data_format='channels_first', kernel_regularizer=regularizers.l2(0.01))(conv_mid)
-
-    # model = Model(inputs=inputs, outputs=conv_out)
-
-    # model.compile(optimizer=Adam(lr=initial_learning_rate), loss=msq_loss, metrics=[msq])
 
     conv1 = Conv3D(int(32/downsize_filters_factor), (3, 3, 3), activation='relu', data_format='channels_first',
                    padding='same')(inputs)
@@ -55,8 +96,88 @@ def regression_model_3d(input_shape, downsize_filters_factor=1, pool_size=(2, 2,
     conv4 = Conv3D(int(512/downsize_filters_factor), (3, 3, 3), activation='relu',data_format='channels_first',
                    padding='same')(conv4)
 
-    up5 = get_upconv(pool_size=pool_size, deconvolution=deconvolution, depth=2,
-                     nb_filters=int(512/downsize_filters_factor), image_shape=input_shape[-3:])(conv4)
+    input_list = [conv4] * output_modalities
+    output_list = [None] * output_modalities
+    layers_list = [{} for x in xrange(output_modalities)]
+    previous_layers_list = [{} for x in xrange(output_modalities)]
+
+    for modality in xrange(output_modalities):
+
+        if modality == 0:
+            previous_layers_list[modality] = {'conv1': conv1, 'conv2':conv2, 'conv3':conv3}
+        else:
+            previous_layers_list[modality] = {'conv1': layers_list[modality-1]['conv7'], 'conv2':layers_list[modality-1]['conv6'], 'conv3':layers_list[modality-1]['conv5']}
+
+        layers_list[modality]['up5'] = get_upconv(pool_size=pool_size, deconvolution=deconvolution, depth=2, nb_filters=int(512/downsize_filters_factor), image_shape=input_shape[-3:])(conv4)
+        layers_list[modality]['up5'] = concatenate([layers_list[modality]['up5'], previous_layers_list[modality]['conv3']], axis=1)
+        layers_list[modality]['conv5'] = Conv3D(int(256/downsize_filters_factor), (3, 3, 3), activation='relu', data_format='channels_first',padding='same')(layers_list[modality]['up5'])
+        layers_list[modality]['conv5'] = Conv3D(int(256/downsize_filters_factor), (3, 3, 3), activation='relu',data_format='channels_first',
+                       padding='same')(layers_list[modality]['conv5'])
+
+        layers_list[modality]['up6'] = get_upconv(pool_size=pool_size, deconvolution=deconvolution, depth=1,
+                         nb_filters=int(256/downsize_filters_factor),image_shape=input_shape[-3:])(layers_list[modality]['conv5'])
+        layers_list[modality]['up6'] = concatenate([layers_list[modality]['up6'], previous_layers_list[modality]['conv2']], axis=1)
+        layers_list[modality]['conv6'] = Conv3D(int(128/downsize_filters_factor), (3, 3, 3), activation='relu',data_format='channels_first', padding='same')(layers_list[modality]['up6'])
+        layers_list[modality]['conv6'] = Conv3D(int(128/downsize_filters_factor), (3, 3, 3), activation='relu',data_format='channels_first',
+                       padding='same')(layers_list[modality]['conv6'])
+
+        layers_list[modality]['up7'] = get_upconv(pool_size=pool_size, deconvolution=deconvolution, depth=0,
+                         nb_filters=int(128/downsize_filters_factor), image_shape=input_shape[-3:])(layers_list[modality]['conv6'])
+        layers_list[modality]['up7'] = concatenate([layers_list[modality]['up7'], previous_layers_list[modality]['conv1']], axis=1)
+        layers_list[modality]['conv7'] = Conv3D(int(64/downsize_filters_factor), (3, 3, 3), activation='relu',data_format='channels_first', padding='same')(layers_list[modality]['up7'])
+        layers_list[modality]['conv7'] = Conv3D(int(64/downsize_filters_factor), (3, 3, 3), activation='relu',data_format='channels_first',
+                       padding='same')(layers_list[modality]['conv7'])
+
+        output_list[modality] = Conv3D(int(1), (1, 1, 1), data_format='channels_first')(layers_list[modality]['conv7'])
+
+    final_output = output_list[0]
+    if len(output_list) > 1:
+        for output in output_list[1:]:
+            final_output = concatenate([final_output, output], axis=1)
+
+    if regression:
+        act = Activation('relu')(final_output)
+        model = Model(inputs=inputs, outputs=act)
+        model.compile(optimizer=Adam(lr=initial_learning_rate), loss=msq_loss, metrics=[msq])
+    else:
+        act = Activation('sigmoid')(final_output)
+        model = Model(inputs=inputs, outputs=act)
+        model.compile(optimizer=Adam(lr=initial_learning_rate), loss=dice_coef_loss, metrics=[dice_coef])
+
+    return model
+
+def u_net_3d(input_shape=None, input_tensor=None, downsize_filters_factor=1, pool_size=(2, 2, 2), initial_learning_rate=0.00001, convolutions=4, dropout=.25, filter_shape=(3,3,3), num_outputs=1, deconvolution=True, regression=True, output_shape=None):
+
+    # This is messy, as is the part at the conclusion.
+    if input_tensor is None:
+        inputs = Input(input_shape)
+    else:
+        inputs = input_tensor
+
+    conv1 = Conv3D(int(32/downsize_filters_factor), (3, 3, 3), activation='relu', data_format='channels_first',
+                   padding='same')(inputs)
+    conv1 = Conv3D(int(64/downsize_filters_factor), (3, 3, 3), activation='relu', data_format='channels_first',
+                   padding='same')(conv1)
+    pool1 = MaxPooling3D(pool_size=pool_size, data_format='channels_first',)(conv1)
+
+    conv2 = Conv3D(int(64/downsize_filters_factor), (3, 3, 3), activation='relu',data_format='channels_first',
+                   padding='same')(pool1)
+    conv2 = Conv3D(int(128/downsize_filters_factor), (3, 3, 3), activation='relu',data_format='channels_first',
+                   padding='same')(conv2)
+    pool2 = MaxPooling3D(pool_size=pool_size, data_format='channels_first')(conv2)
+
+    conv3 = Conv3D(int(128/downsize_filters_factor), (3, 3, 3), activation='relu',data_format='channels_first',
+                   padding='same')(pool2)
+    conv3 = Conv3D(int(256/downsize_filters_factor), (3, 3, 3), activation='relu',data_format='channels_first',
+                   padding='same')(conv3)
+    pool3 = MaxPooling3D(pool_size=pool_size, data_format='channels_first')(conv3)
+
+    conv4 = Conv3D(int(256/downsize_filters_factor), (3, 3, 3), activation='relu',data_format='channels_first',
+                   padding='same')(pool3)
+    conv4 = Conv3D(int(512/downsize_filters_factor), (3, 3, 3), activation='relu',data_format='channels_first',
+                   padding='same')(conv4)
+
+    up5 = get_upconv(pool_size=pool_size, deconvolution=deconvolution, depth=2, nb_filters=int(512/downsize_filters_factor), image_shape=input_shape[-3:])(conv4)
     up5 = concatenate([up5, conv3], axis=1)
     conv5 = Conv3D(int(256/downsize_filters_factor), (3, 3, 3), activation='relu', data_format='channels_first',padding='same')(up5)
     conv5 = Conv3D(int(256/downsize_filters_factor), (3, 3, 3), activation='relu',data_format='channels_first',
@@ -78,6 +199,10 @@ def regression_model_3d(input_shape, downsize_filters_factor=1, pool_size=(2, 2,
 
     conv8 = Conv3D(int(num_outputs), (1, 1, 1), data_format='channels_first',)(conv7)
 
+    # Messy
+    if input_tensor is not None:
+        return conv8
+
     if regression:
         act = Activation('relu')(conv8)
         model = Model(inputs=inputs, outputs=act)
@@ -88,6 +213,24 @@ def regression_model_3d(input_shape, downsize_filters_factor=1, pool_size=(2, 2,
         model.compile(optimizer=Adam(lr=initial_learning_rate), loss=dice_coef_loss, metrics=[dice_coef])
 
     return model
+
+def linear_net(input_shape, downsize_filters_factor=1, pool_size=(2, 2, 2), initial_learning_rate=0.00001, convolutions=4, dropout=.25, filter_shape=(3,3,3), num_outputs=1, deconvolution=True, regression=True):
+
+    inputs = Input((1,32,32,32,4))
+    conv_mid = Conv3D(int(32/downsize_filters_factor), filter_shape, activation='relu', padding='same', data_format='channels_first')(inputs)
+
+    conv_mid = Dropout(0.25)(conv_mid)
+
+    for conv_num in xrange(convolutions-2):
+
+        conv_mid = Conv3D(int(32/downsize_filters_factor), filter_shape, activation='relu', padding='same', data_format='channels_first')(conv_mid)
+        conv_mid = Dropout(0.25)(conv_mid)
+
+    conv_out = Conv3D(int(1), filter_shape, activation='tanh', padding='same', data_format='channels_first', kernel_regularizer=regularizers.l2(0.01))(conv_mid)
+
+    model = Model(inputs=inputs, outputs=conv_out)
+
+    model.compile(optimizer=Adam(lr=initial_learning_rate), loss=msq_loss, metrics=[msq])
 
 def msq(y_true, y_pred):
     return K.sum(K.pow(y_true - y_pred, 2), axis=None)
